@@ -1,0 +1,124 @@
+Me ajude a criar uma integração Python com o sistema SISE de autenticação central, 
+a integração é feita com o Red Hat Single Sign On. 
+A biblioteca de integração é a python-keycloak, que tem o seguinte link de documentação: https://github.com/marcospereirampj/python-keycloak/issues e esses exemplos: 
+
+Example of Using Keycloak OpenID
+from keycloak import KeycloakOpenID
+
+# Configure client
+keycloak_openid = KeycloakOpenID(server_url="http://localhost:8080/auth/",
+                                 client_id="example_client",
+                                 realm_name="example_realm",
+                                 client_secret_key="secret")
+
+# Get WellKnown
+config_well_known = keycloak_openid.well_known()
+
+# Get Code With Oauth Authorization Request
+auth_url = keycloak_openid.auth_url(
+    redirect_uri="your_call_back_url",
+    scope="email",
+    state="your_state_info")
+
+# Get Access Token With Code
+access_token = keycloak_openid.token(
+    grant_type='authorization_code',
+    code='the_code_you_get_from_auth_url_callback',
+    redirect_uri="your_call_back_url")
+
+
+# Get Token
+token = keycloak_openid.token("user", "password")
+token = keycloak_openid.token("user", "password", totp="012345")
+
+# Get token using Token Exchange
+token = keycloak_openid.exchange_token(token['access_token'], "my_client", "other_client", "some_user")
+
+# Get Userinfo
+userinfo = keycloak_openid.userinfo(token['access_token'])
+
+# Refresh token
+token = keycloak_openid.refresh_token(token['refresh_token'])
+
+# Logout
+keycloak_openid.logout(token['refresh_token'])
+Example of Using Keycloak Admin API
+from keycloak import KeycloakAdmin
+from keycloak import KeycloakOpenIDConnection
+
+keycloak_connection = KeycloakOpenIDConnection(
+                        server_url="http://localhost:8080/",
+                        username='example-admin',
+                        password='secret',
+                        realm_name="master",
+                        user_realm_name="only_if_other_realm_than_master",
+                        client_id="my_client",
+                        client_secret_key="client-secret",
+                        verify=True)
+
+keycloak_admin = KeycloakAdmin(connection=keycloak_connection)
+
+# Add user
+new_user = keycloak_admin.create_user({"email": "example@example.com",
+                                       "username": "example@example.com",
+                                       "enabled": True,
+                                       "firstName": "Example",
+                                       "lastName": "Example"})
+
+# Add user and raise exception if username already exists
+# exist_ok currently defaults to True for backwards compatibility reasons
+new_user = keycloak_admin.create_user({"email": "example@example.com",
+                                       "username": "example@example.com",
+                                       "enabled": True,
+                                       "firstName": "Example",
+                                       "lastName": "Example"},
+                                      exist_ok=False)
+
+# Add user and set password
+new_user = keycloak_admin.create_user({"email": "example@example.com",
+                                       "username": "example@example.com",
+                                       "enabled": True,
+                                       "firstName": "Example",
+                                       "lastName": "Example",
+                    "credentials": [{"value": "secret","type": "password",}]})
+
+
+
+
+Seguem as informações para integrar com a AC de produção:
+{
+  "realm": "unicamp-auth",
+  "auth-server-url": "https://autenticacaocentral.unicamp.br/auth/",
+  "ssl-required": "all",
+  "resource": "educorp-apoios-prod",
+  "credentials": {
+    "secret": "cae85610-cafb-4c21-b8b2-19578fb8007d"
+  },
+  "confidential-port": 0
+}
+
+TOKEN:
+
+{
+  "token": {
+    "access_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJIakZwbUozNmswMDRBajlIZEZ6NGJBdzExZGhuRkR6bi1TZ1JxTUVaS3JVIn0.eyJleHAiOjE3NTY3NTAyODIsImlhdCI6MTc1Njc0OTM4MiwianRpIjoiZTcwNzg5OGMtZmJkNS00ZTg3LTlkOTEtOTA0Yzk5Mjk0ZDQyIiwiaXNzIjoiaHR0cHM6Ly9hdXRlbnRpY2FjYW9jZW50cmFsLnVuaWNhbXAuYnIvYXV0aC9yZWFsbXMvdW5pY2FtcC1hdXRoIiwiYXVkIjoiYWNjb3VudCIsInN1YiI6IjlkZTA5YTZlLWVhZWEtNDRkNC1hOWY3LTI2YzFiYmYwZWQ5ZSIsInR5cCI6IkJlYXJlciIsImF6cCI6ImVkdWNvcnAtYXBvaW9zLXByb2QiLCJzZXNzaW9uX3N0YXRlIjoiZDZmMjIyNTgtMmExZS00ZDJiLWFlOTktZWQzMWRiYmY2ZTFiIiwiYWNyIjoiMSIsImFsbG93ZWQtb3JpZ2lucyI6WyJodHRwczovL3NlcnZpY29zLmVkdWNvcnAudW5pY2FtcC5iciJdLCJyZWFsbV9hY2Nlc3MiOnsicm9sZXMiOlsib2ZmbGluZV9hY2Nlc3MiLCJ1bWFfYXV0aG9yaXphdGlvbiJdfSwicmVzb3VyY2VfYWNjZXNzIjp7ImFjY291bnQiOnsicm9sZXMiOlsibWFuYWdlLWFjY291bnQiLCJtYW5hZ2UtYWNjb3VudC1saW5rcyIsInZpZXctcHJvZmlsZSJdfX0sInNjb3BlIjoib3BlbmlkIHByb2ZpbGUgZW1haWwiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsIm5hbWUiOiJKb2FvIEVkdWFyZG8gUGVyZWlyYSBkb3MgU2FudG9zIEVkdWFyZG8gUGVyZWlyYSBkb3MgU2FudG9zIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiam9hb2VkdSIsImxvY2FsZSI6InB0LUJSIiwiZ2l2ZW5fbmFtZSI6IkpvYW8gRWR1YXJkbyBQZXJlaXJhIGRvcyBTYW50b3MiLCJmYW1pbHlfbmFtZSI6IkVkdWFyZG8gUGVyZWlyYSBkb3MgU2FudG9zIiwiZW1haWwiOiJqb2FvZWR1QHVuaWNhbXAuYnIifQ.a05D9J_PPKSUfjsrXanusIR5B8d6RpyD5f81S_C8xO9EdB8oTxDqZXQ3Yi5euby7XqkNC_UrHSeE332Xnn_KfSWfmbGJKHzD3gHRtVxIbz0pypjx2AhK8qFwex7SuHsIuwDOKrOUmDaJLEiOyFgLrYUkFCVnA4phQaxeQtFm3sqsumePJMa2aYYPxDpzPeRpNQUjMMB83Bc04ZDRNjaO2Ox_OvE65gIahQ043cb_0X5lWNecukRj6OxM8OTCrhTCXi4ssmiOIXlhh2WajJgi-WMGSyYsAgHcos8yYcVn7xaH3pSB0wzzNAM3tTTVkiBEZTPVLVcmSZtgJuMYEUb25g",
+    "expires_in": 900,
+    "id_token": "eyJhbGciOiJSUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICJIakZwbUozNmswMDRBajlIZEZ6NGJBdzExZGhuRkR6bi1TZ1JxTUVaS3JVIn0.eyJleHAiOjE3NTY3NTAyODIsImlhdCI6MTc1Njc0OTM4MiwiYXV0aF90aW1lIjowLCJqdGkiOiJlYWU2MWFiNi0wOWMwLTRlODEtYTViZi00YTM2ODE4OTNhMDgiLCJpc3MiOiJodHRwczovL2F1dGVudGljYWNhb2NlbnRyYWwudW5pY2FtcC5ici9hdXRoL3JlYWxtcy91bmljYW1wLWF1dGgiLCJhdWQiOiJlZHVjb3JwLWFwb2lvcy1wcm9kIiwic3ViIjoiOWRlMDlhNmUtZWFlYS00NGQ0LWE5ZjctMjZjMWJiZjBlZDllIiwidHlwIjoiSUQiLCJhenAiOiJlZHVjb3JwLWFwb2lvcy1wcm9kIiwic2Vzc2lvbl9zdGF0ZSI6ImQ2ZjIyMjU4LTJhMWUtNGQyYi1hZTk5LWVkMzFkYmJmNmUxYiIsImFjciI6IjEiLCJlbWFpbF92ZXJpZmllZCI6ZmFsc2UsIm5hbWUiOiJKb2FvIEVkdWFyZG8gUGVyZWlyYSBkb3MgU2FudG9zIEVkdWFyZG8gUGVyZWlyYSBkb3MgU2FudG9zIiwicHJlZmVycmVkX3VzZXJuYW1lIjoiam9hb2VkdSIsImxvY2FsZSI6InB0LUJSIiwiZ2l2ZW5fbmFtZSI6IkpvYW8gRWR1YXJkbyBQZXJlaXJhIGRvcyBTYW50b3MiLCJmYW1pbHlfbmFtZSI6IkVkdWFyZG8gUGVyZWlyYSBkb3MgU2FudG9zIiwiZW1haWwiOiJqb2FvZWR1QHVuaWNhbXAuYnIifQ.RhpJTUAzXCaQ9bn766WwVYUeeO97hiuZPxTXb0uj_5dPxWLv1bRxQ5Y1iBELz87hbK3-LgF5K3-KfdhxQ609ko33VNQdG4waJYaS8knyP6DMlPe5kRD4Ji6MHmohWIWcixJpV4HM4VZnRCQUQrwXtYb4sWWvR5ZLZSOI7Chg1ic7K0k1Xs7T4cMJv_F2L3Ee-Y-PzUTb9zzaF16i-CIL4qDPjKnp91qy9KmZq_tCGAbtAiLeR6d0Kvzs5A6Q2FD1jGh-Gh4wk3tEREDpFXjoKucy07ZlVmSd-GkISkVEA8N876m8eohxpL57hYsLvvHwxfC7Fwj96-_50PMHn3YoTg",
+    "not-before-policy": 1518113894,
+    "refresh_expires_in": 3600,
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCIgOiAiSldUIiwia2lkIiA6ICI4YjAyOWQ5MC1mOWFmLTRmY2MtYjRiOS1iM2YzNDE5NzRlN2EifQ.eyJleHAiOjE3NTY3NTI5ODIsImlhdCI6MTc1Njc0OTM4MiwianRpIjoiNGFjZmI0N2YtYjY0YS00MGI3LWFiMGMtMzUxZjEwNjFiNzczIiwiaXNzIjoiaHR0cHM6Ly9hdXRlbnRpY2FjYW9jZW50cmFsLnVuaWNhbXAuYnIvYXV0aC9yZWFsbXMvdW5pY2FtcC1hdXRoIiwiYXVkIjoiaHR0cHM6Ly9hdXRlbnRpY2FjYW9jZW50cmFsLnVuaWNhbXAuYnIvYXV0aC9yZWFsbXMvdW5pY2FtcC1hdXRoIiwic3ViIjoiOWRlMDlhNmUtZWFlYS00NGQ0LWE5ZjctMjZjMWJiZjBlZDllIiwidHlwIjoiUmVmcmVzaCIsImF6cCI6ImVkdWNvcnAtYXBvaW9zLXByb2QiLCJzZXNzaW9uX3N0YXRlIjoiZDZmMjIyNTgtMmExZS00ZDJiLWFlOTktZWQzMWRiYmY2ZTFiIiwic2NvcGUiOiJvcGVuaWQgcHJvZmlsZSBlbWFpbCJ9.TdIKYwBbHeSnt0HYWK2PC4bYVzkcUYmZQgFkdR_PcgA",
+    "scope": "openid profile email",
+    "session_state": "d6f22258-2a1e-4d2b-ae99-ed31dbbf6e1b",
+    "token_type": "bearer"
+  },
+  "userinfo": {
+    "email": "joaoedu@unicamp.br",
+    "email_verified": false,
+    "family_name": "Eduardo Pereira dos Santos",
+    "given_name": "Joao Eduardo Pereira dos Santos",
+    "locale": "pt-BR",
+    "name": "Joao Eduardo Pereira dos Santos Eduardo Pereira dos Santos",
+    "preferred_username": "joaoedu",
+    "sub": "9de09a6e-eaea-44d4-a9f7-26c1bbf0ed9e"
+  }
+}
