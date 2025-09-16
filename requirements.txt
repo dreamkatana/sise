@@ -1,3 +1,4 @@
 flask
 python-keycloak
 mysql-connector-python
+mariadb
