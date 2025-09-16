@@ -1,19 +1,11 @@
 from flask import Blueprint, jsonify, g, request
 from app.auth import token_required
-import mysql.connector
-import config.config as config
+from app.models import CursoAperf, FichaCol, CursoAperfCol, FrequenciaTurma
+from app.extensions import db
+from sqlalchemy import case, and_
+import json
 
 courses_bp = Blueprint('courses', __name__)
-
-def get_db():
-    if 'db' not in g:
-        g.db = mysql.connector.connect(
-            host=config.DB_HOST,
-            user=config.DB_USER,
-            password=config.DB_PASSWORD,
-            database=config.DB_NAME
-        )
-    return g.db
 
 @courses_bp.route('/courses', methods=['GET'])
 @token_required
@@ -23,60 +15,53 @@ def get_courses():
         if not user_email:
             return jsonify({'error': 'Email não encontrado no token'}), 400
 
-        conn = get_db()
-        cursor = conn.cursor(dictionary=True)
-
         course_config = load_course_config()
-
-        base_query = """
-        SELECT V_EDUCORP_CURSO_APERF_COL.NUMCAD AS MATRICULA,
-               V_EDUCORP_CURSO_APERF.`CODCUA` AS "CÓDIGO CURSO",
-               V_EDUCORP_CURSO_APERF_COL.TMACUA AS "CÓDIGO TURMA",
-               V_EDUCORP_CURSO_APERF_COL.`NOMCUA` AS "NOME CURSO",
-               V_EDUCORP_CURSO_APERF_COL.`PERINI` AS "DATA INICIO",
-               V_EDUCORP_CURSO_APERF_COL.`PERFIM` AS "DATA FINAL",
-               V_EDUCORP_CURSO_APERF_COL.`DESSITCUA` AS "SITUACAO DA TURMA",
-               V_EDUCORP_CURSO_APERF_COL.`CARHOR` AS "CARGA HORÁRIA"
-        FROM V_EDUCORP_CURSO_APERF
-          INNER JOIN V_EDUCORP_CURSO_APERF_COL
-             ON V_EDUCORP_CURSO_APERF.`CODCUA` = V_EDUCORP_CURSO_APERF_COL.`CODCUA`
-          INNER JOIN V_EDUCORP_FICHACOL
-             ON V_EDUCORP_FICHACOL.`TIPCOL` = V_EDUCORP_CURSO_APERF_COL.`TIPCOL`
-             AND V_EDUCORP_CURSO_APERF_COL.`NUMCAD` = V_EDUCORP_FICHACOL.`NUMCAD`
-        WHERE V_EDUCORP_FICHACOL.`EMACOM` = %s
-        """
-
-        params = [user_email]
-
         codcua_order = course_config.get('codcua_order', [])
+
+        query = db.session.query(
+            FichaCol.NUMCAD.label('MATRICULA'),
+            CursoAperf.CODCUA.label('CÓDIGO CURSO'),
+            CursoAperfCol.TMACUA.label('CÓDIGO TURMA'),
+            CursoAperf.NOMCUA.label('NOME CURSO'),
+            CursoAperfCol.PERINI.label('DATA INICIO'),
+            CursoAperfCol.PERFIM.label('DATA FINAL'),
+            CursoAperfCol.DESSITCUA.label('SITUACAO DA TURMA'),
+            CursoAperfCol.CARHOR.label('CARGA HORÁRIA'),
+            FrequenciaTurma.QTDFAL.label('QUANTIDADE DE FALTAS'),
+            FrequenciaTurma.HORFAL.label('HORAS_FALTA')
+        ).join(
+            CursoAperfCol,
+            and_(FichaCol.TIPCOL == CursoAperfCol.TIPCOL, FichaCol.NUMCAD == CursoAperfCol.NUMCAD)
+        ).join(
+            CursoAperf,
+            CursoAperf.CODCUA == CursoAperfCol.CODCUA
+        ).join(
+            FrequenciaTurma,
+            and_(
+                FichaCol.TIPCOL == FrequenciaTurma.TIPCOL,
+                FichaCol.NUMCAD == FrequenciaTurma.NUMCAD,
+                CursoAperfCol.CODCUA == FrequenciaTurma.CODCUA,
+                CursoAperfCol.TMACUA == FrequenciaTurma.TMACUA
+            )
+        ).filter(FichaCol.EMACOM == user_email)
+
         if codcua_order:
-            # Placeholders for the IN clause
-            placeholders_in = ','.join(['%s'] * len(codcua_order))
-            base_query += f" AND V_EDUCORP_CURSO_APERF.CODCUA IN ({placeholders_in})"
+            query = query.filter(CursoAperf.CODCUA.in_(codcua_order))
 
-            # Placeholders for the ORDER BY FIELD clause
-            placeholders_order = ','.join(['%s'] * len(codcua_order))
-            order_clause = "ORDER BY FIELD(V_EDUCORP_CURSO_APERF.CODCUA, " + placeholders_order + ")"
-            base_query += " " + order_clause
+            order_logic = case(
+                {codcua: index for index, codcua in enumerate(codcua_order)},
+                value=CursoAperf.CODCUA
+            )
+            query = query.order_by(order_logic)
 
-            # The parameters for the IN clause and the ORDER BY FIELD clause are the same.
-            # We need to provide them for both sets of placeholders.
-            params_for_in = codcua_order
-            params_for_order = codcua_order
-            params.extend(params_for_in)
-            params.extend(params_for_order)
+        results = query.all()
 
-        cursor.execute(base_query, tuple(params))
-        courses = cursor.fetchall()
-
-        cursor.close()
+        courses = [dict(row._mapping) for row in results]
 
         return jsonify(courses)
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
-
-import json
 
 CONFIG_FILE = 'course_config.json'
 
