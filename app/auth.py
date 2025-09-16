@@ -1,7 +1,6 @@
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, g
 from keycloak import KeycloakOpenID
 import config.config as config
-import jwt
 from functools import wraps
 
 auth_bp = Blueprint('auth', __name__)
@@ -24,8 +23,9 @@ def token_required(f):
         if not token:
             return jsonify({'error': 'Token não fornecido'}), 401
         try:
-            # Valida o token usando o endpoint do Keycloak
-            keycloak_openid.introspect(token)
+            # Valida o token e obtém informações do usuário
+            userinfo = keycloak_openid.userinfo(token)
+            g.user = userinfo
         except Exception as e:
             return jsonify({'error': 'Token inválido ou expirado', 'details': str(e)}), 401
         return f(*args, **kwargs)
