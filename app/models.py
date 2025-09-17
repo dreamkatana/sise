@@ -102,7 +102,7 @@ class CursoAperfCol(db.Model):
     __tablename__ = 'V_EDUCORP_CURSO_APERF_COL'
     TIPCOL = db.Column(db.Integer, primary_key=True)
     NUMCAD = db.Column(db.Integer, primary_key=True)
-    CODCUA = db.Column(db.Integer, ForeignKey('V_EDUCORP_CURSO_APERF.CODCUA'), primary_key=True)
+    CODCUA = db.Column(db.Integer, primary_key=True)
     SEQHCR = db.Column(db.Integer, primary_key=True)
     PERINI = db.Column(db.DateTime)
     PERFIM = db.Column(db.DateTime)
@@ -122,8 +122,7 @@ class CursoAperfCol(db.Model):
     CERTSTRING = db.Column(db.Text)
 
     __table_args__ = (
-        PrimaryKeyConstraint('TIPCOL', 'NUMCAD', 'CODCUA', 'SEQHCR'),
-        ForeignKeyConstraint(['TIPCOL', 'NUMCAD'], ['V_EDUCORP_FICHACOL.TIPCOL', 'V_EDUCORP_FICHACOL.NUMCAD']),
+        PrimaryKeyConstraint('TIPCOL', 'NUMCAD', 'CODCUA', 'SEQHCR'),  
     )
 
     curso_aperf = db.relationship('CursoAperf', backref=db.backref('colaboradores', lazy=True))
@@ -144,7 +143,6 @@ class FrequenciaTurma(db.Model):
 
     __table_args__ = (
         PrimaryKeyConstraint('CODCUA', 'TMACUA', 'NUMEMP', 'TIPCOL', 'NUMCAD'),
-        ForeignKeyConstraint(['TIPCOL', 'NUMCAD'], ['V_EDUCORP_FICHACOL.TIPCOL', 'V_EDUCORP_FICHACOL.NUMCAD']),
     )
 
     ficha_col = db.relationship('FichaCol',

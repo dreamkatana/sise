@@ -1,15 +1,15 @@
 from flask import Blueprint, request, jsonify, g
 from keycloak import KeycloakOpenID
-import config.config as config
+from config.config import Config  # Alteração para importar a classe Config
 from functools import wraps
 
 auth_bp = Blueprint('auth', __name__)
 
 keycloak_openid = KeycloakOpenID(
-    server_url=config.KEYCLOAK_SERVER_URL,
-    client_id=config.KEYCLOAK_CLIENT_ID,
-    realm_name=config.KEYCLOAK_REALM,
-    client_secret_key=config.KEYCLOAK_CLIENT_SECRET
+    server_url=Config.KEYCLOAK_SERVER_URL,
+    client_id=Config.KEYCLOAK_CLIENT_ID,
+    realm_name=Config.KEYCLOAK_REALM,
+    client_secret_key=Config.KEYCLOAK_CLIENT_SECRET
 )
 
 def token_required(f):

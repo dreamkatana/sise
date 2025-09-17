@@ -4,3 +4,9 @@ Me ajude a criar uma integração Pyt.txt
 *.pyc
 app/__pycache__/auth.cpython-313.pyc
 app/__pycache__/__init__.cpython-313.pyc
+app/__pycache__/__init__.cpython-313.pyc
+**/__pycache__/**
+/*.pyc
+/**/__pycache__/**
+/**/__init__.py
+/.vscode
