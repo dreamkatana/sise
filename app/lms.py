@@ -9,15 +9,15 @@ lms_bp = Blueprint('lms', __name__)
 
 # Configuração para usuários demo
 DEMO_USERS = {
-    'aluno@unicamp.br': {
-        'name': 'Estudante Demo',
+    'joaoedu@unicamp.br': {
+        'name': 'Estudante Eduardo',
         'is_admin': False,
-        'matricula': 12345
+        'matricula': 293258
     },
     'joaoedu@unicamp.br': {
         'name': 'João Eduardo',
         'is_admin': True,
-        'matricula': 67890
+        'matricula': 293258
     }
 }
 
@@ -36,9 +36,15 @@ def save_course_config(config):
 
 def get_user_courses(user_email):
     """Busca cursos do usuário baseado no email"""
+    # COLOQUE UM BREAKPOINT NESTA LINHA ↓
+    print(f"DEBUG: Buscando cursos para o email: {user_email}")
+    
     try:
         course_config = load_course_config()
         codcua_order = course_config.get('codcua_order', [])
+
+        # COLOQUE UM BREAKPOINT NESTA LINHA ↓  
+        print(f"DEBUG: Configuração carregada - códigos: {codcua_order}")
 
         query = db.session.query(
             FichaCol.NUMCAD.label('MATRICULA'),
@@ -184,9 +190,28 @@ def login():
 
 @lms_bp.route('/logout')
 def logout():
+    user_name = session.get('user_name', 'Usuário')
     session.clear()
-    flash('Logout realizado com sucesso!', 'success')
+    flash(f'Logout realizado com sucesso! Até logo, {user_name}!', 'success')
     return redirect(url_for('lms.login'))
+
+@lms_bp.route('/logout/ajax', methods=['POST'])
+def logout_ajax():
+    """Endpoint para logout via AJAX"""
+    if 'user_email' in session:
+        user_name = session.get('user_name', 'Usuário')
+        session.clear()
+        return jsonify({
+            'success': True, 
+            'message': f'Logout realizado com sucesso! Até logo, {user_name}!',
+            'redirect': url_for('lms.login')
+        })
+    else:
+        return jsonify({
+            'success': False,
+            'message': 'Usuário não está logado',
+            'redirect': url_for('lms.login')
+        })
 
 @lms_bp.route('/')
 @lms_bp.route('/dashboard')

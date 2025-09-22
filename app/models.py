@@ -1,5 +1,6 @@
 from app.extensions import db
 from sqlalchemy import PrimaryKeyConstraint, ForeignKey, and_
+from sqlalchemy.orm import foreign
 
 class CursoAperf(db.Model):
     __tablename__ = 'V_EDUCORP_CURSO_APERF'
@@ -92,10 +93,10 @@ class FichaCol(db.Model):
     )
 
     cursos = db.relationship('CursoAperfCol',
-                             primaryjoin="and_(FichaCol.TIPCOL==CursoAperfCol.TIPCOL, FichaCol.NUMCAD==CursoAperfCol.NUMCAD)",
+                             primaryjoin="and_(FichaCol.TIPCOL==foreign(CursoAperfCol.TIPCOL), FichaCol.NUMCAD==foreign(CursoAperfCol.NUMCAD))",
                              back_populates='ficha_col')
     frequencia = db.relationship('FrequenciaTurma',
-                                 primaryjoin="and_(FichaCol.TIPCOL==FrequenciaTurma.TIPCOL, FichaCol.NUMCAD==FrequenciaTurma.NUMCAD)",
+                                 primaryjoin="and_(FichaCol.TIPCOL==foreign(FrequenciaTurma.TIPCOL), FichaCol.NUMCAD==foreign(FrequenciaTurma.NUMCAD))",
                                  back_populates='ficha_col')
 
 class CursoAperfCol(db.Model):
@@ -125,9 +126,11 @@ class CursoAperfCol(db.Model):
         PrimaryKeyConstraint('TIPCOL', 'NUMCAD', 'CODCUA', 'SEQHCR'),  
     )
 
-    curso_aperf = db.relationship('CursoAperf', backref=db.backref('colaboradores', lazy=True))
+    curso_aperf = db.relationship('CursoAperf', 
+                                  primaryjoin="foreign(CursoAperfCol.CODCUA)==CursoAperf.CODCUA",
+                                  backref=db.backref('colaboradores', lazy=True))
     ficha_col = db.relationship('FichaCol',
-                                primaryjoin="and_(CursoAperfCol.TIPCOL==FichaCol.TIPCOL, CursoAperfCol.NUMCAD==FichaCol.NUMCAD)",
+                                primaryjoin="and_(foreign(CursoAperfCol.TIPCOL)==FichaCol.TIPCOL, foreign(CursoAperfCol.NUMCAD)==FichaCol.NUMCAD)",
                                 back_populates='cursos')
 
 class FrequenciaTurma(db.Model):
@@ -146,5 +149,5 @@ class FrequenciaTurma(db.Model):
     )
 
     ficha_col = db.relationship('FichaCol',
-                                primaryjoin="and_(FrequenciaTurma.TIPCOL==FichaCol.TIPCOL, FrequenciaTurma.NUMCAD==FichaCol.NUMCAD)",
+                                primaryjoin="and_(foreign(FrequenciaTurma.TIPCOL)==FichaCol.TIPCOL, foreign(FrequenciaTurma.NUMCAD)==FichaCol.NUMCAD)",
                                 back_populates='frequencia')
