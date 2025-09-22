@@ -3,3 +3,4 @@ python-keycloak
 Flask-SQLAlchemy
 #mysql-connector-python
 mariadb
+python-dotenv

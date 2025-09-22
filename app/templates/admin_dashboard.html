@@ -1,0 +1,347 @@
+{% extends "base.html" %}
+
+{% block title %}Administração - SISE{% endblock %}
+{% block page_title %}Painel Administrativo{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="h4 mb-3">Painel Administrativo</h2>
+        <p class="text-muted">Gerencie cursos, usuários e configurações do sistema.</p>
+    </div>
+</div>
+
+<!-- Cards de Estatísticas Gerais -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card" style="border-left-color: #007bff;">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Total de Usuários
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ admin_stats.total_usuarios }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-people text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card" style="border-left-color: #28a745;">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Cursos Ativos
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ admin_stats.cursos_ativos }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-book text-success" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card" style="border-left-color: #ffc107;">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Certificados Emitidos
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ admin_stats.certificados }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-award text-warning" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card" style="border-left-color: #6f42c1;">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1" style="color: #6f42c1;">
+                            Horas Totais
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ admin_stats.total_horas }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-clock" style="color: #6f42c1; font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Configuração de Cursos -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-gear me-2"></i>
+                    Configuração de Cursos
+                </h5>
+                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#courseConfigModal">
+                    <i class="bi bi-plus me-1"></i>
+                    Editar Configuração
+                </button>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">Configure a ordem de exibição dos cursos e emails de administradores.</p>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Ordem dos Cursos:</h6>
+                        <div class="list-group" id="course-order-list">
+                            {% for codigo in course_config.codcua_order %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>Curso {{ codigo }}</span>
+                                <i class="bi bi-grip-vertical text-muted"></i>
+                            </div>
+                            {% endfor %}
+                            {% if not course_config.codcua_order %}
+                            <div class="list-group-item text-muted text-center">
+                                Nenhuma ordem definida
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Administradores:</h6>
+                        <div class="list-group">
+                            {% for email in course_config.admin_emails %}
+                            <div class="list-group-item d-flex justify-content-between align-items-center">
+                                <span>{{ email }}</span>
+                                <span class="badge bg-success">Admin</span>
+                            </div>
+                            {% endfor %}
+                            {% if not course_config.admin_emails %}
+                            <div class="list-group-item text-muted text-center">
+                                Nenhum administrador configurado
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Relatórios Recentes -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-graph-up me-2"></i>
+                    Relatórios e Analytics
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-file-earmark-bar-graph text-primary mb-2" style="font-size: 2rem;"></i>
+                                <h6>Relatório de Conclusões</h6>
+                                <p class="card-text small text-muted">Cursos concluídos por período</p>
+                                <button class="btn btn-outline-primary btn-sm">Gerar Relatório</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-person-check text-success mb-2" style="font-size: 2rem;"></i>
+                                <h6>Relatório de Frequência</h6>
+                                <p class="card-text small text-muted">Análise de presença por curso</p>
+                                <button class="btn btn-outline-success btn-sm">Gerar Relatório</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Últimas Atividades -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-activity me-2"></i>
+                    Atividades Recentes
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-primary"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Novo usuário cadastrado</h6>
+                            <p class="mb-1 text-muted">maria.silva@unicamp.br se inscreveu no sistema</p>
+                            <small class="text-muted">2 horas atrás</small>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-success"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Curso concluído</h6>
+                            <p class="mb-1 text-muted">15 alunos concluíram "Python Básico"</p>
+                            <small class="text-muted">5 horas atrás</small>
+                        </div>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <div class="timeline-marker bg-warning"></div>
+                        <div class="timeline-content">
+                            <h6 class="mb-1">Configuração alterada</h6>
+                            <p class="mb-1 text-muted">Ordem dos cursos foi atualizada</p>
+                            <small class="text-muted">1 dia atrás</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para Configuração de Cursos -->
+<div class="modal fade" id="courseConfigModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Configuração de Cursos</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="course-config-form">
+                    <div class="mb-3">
+                        <label for="codcua-order" class="form-label">Ordem dos Cursos (códigos separados por vírgula):</label>
+                        <input type="text" class="form-control" id="codcua-order" 
+                               value="{{ course_config.codcua_order|join(',') }}"
+                               placeholder="Ex: 101,102,103">
+                        <div class="form-text">Define a ordem de exibição dos cursos no sistema</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="admin-emails" class="form-label">Emails de Administradores (um por linha):</label>
+                        <textarea class="form-control" id="admin-emails" rows="4" 
+                                  placeholder="admin1@unicamp.br&#10;admin2@unicamp.br">{{ course_config.admin_emails|join('\n') }}</textarea>
+                        <div class="form-text">Usuários com estes emails terão acesso administrativo</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveCourseConfig()">Salvar Configuração</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.timeline {
+    position: relative;
+    padding-left: 30px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 20px;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -38px;
+    top: 0;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    left: -32px;
+    top: 6px;
+    bottom: 0;
+    width: 2px;
+    background-color: #e9ecef;
+}
+
+.timeline-content {
+    background-color: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 3px solid #007bff;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function saveCourseConfig() {
+    const codcuaOrder = document.getElementById('codcua-order').value
+        .split(',')
+        .map(code => code.trim())
+        .filter(code => code !== '');
+    
+    const adminEmails = document.getElementById('admin-emails').value
+        .split('\n')
+        .map(email => email.trim())
+        .filter(email => email !== '');
+    
+    const data = {
+        codcua_order: codcuaOrder,
+        admin_emails: adminEmails
+    };
+    
+    fetch('{{ url_for("lms.admin_courses_config") }}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            alert('Configuração salva com sucesso!');
+            location.reload();
+        } else {
+            alert('Erro ao salvar configuração: ' + (data.error || 'Erro desconhecido'));
+        }
+    })
+    .catch(error => {
+        alert('Erro ao salvar configuração: ' + error);
+    });
+    
+    // Fechar modal
+    const modal = bootstrap.Modal.getInstance(document.getElementById('courseConfigModal'));
+    modal.hide();
+}
+</script>
+{% endblock %}

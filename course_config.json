@@ -1,6 +1,7 @@
 {
-    "codcua_order": [],
+    "codcua_order": [101, 102, 103, 104, 105],
     "admin_emails": [
-        "joaoedu@unicamp.br"
+        "joaoedu@unicamp.br",
+        "admin@unicamp.br"
     ]
 }

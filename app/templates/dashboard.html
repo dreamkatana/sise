@@ -1,0 +1,226 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - SISE{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="h4 mb-3">Bem-vindo, {{ session.user_name or 'Estudante' }}!</h2>
+        <p class="text-muted">Acompanhe seu progresso acadêmico e próximos cursos.</p>
+    </div>
+</div>
+
+<!-- Cards de Resumo -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card course-progress">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            Em Andamento
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.em_andamento }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-play-circle text-primary" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card course-completed">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            Concluídos
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.concluidos }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card course-upcoming">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            Próximos
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.proximos }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-clock text-warning" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card course-card" style="border-left-color: #6f42c1;">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-uppercase mb-1" style="color: #6f42c1;">
+                            Total de Horas
+                        </div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.total_horas }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="bi bi-hourglass-split" style="color: #6f42c1; font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cursos em Andamento -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-play-circle me-2"></i>
+                    Cursos em Andamento
+                </h5>
+                <a href="{{ url_for('lms.courses') }}" class="btn btn-outline-primary btn-sm">
+                    Ver Todos
+                </a>
+            </div>
+            <div class="card-body">
+                {% if cursos_andamento %}
+                    <div class="row">
+                        {% for curso in cursos_andamento %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card h-100 course-card course-progress">
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ curso['NOME CURSO'] }}</h6>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            <i class="bi bi-calendar me-1"></i>
+                                            {{ curso['DATA INICIO'].strftime('%d/%m/%Y') if curso['DATA INICIO'] else 'Data não definida' }}
+                                        </small>
+                                    </p>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            <i class="bi bi-clock me-1"></i>
+                                            {{ curso['CARGA HORÁRIA'] }}h
+                                        </small>
+                                    </p>
+                                    <div class="progress mb-2" style="height: 5px;">
+                                        <div class="progress-bar" role="progressbar" style="width: 50%"></div>
+                                    </div>
+                                    <small class="text-muted">50% concluído</small>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-book text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nenhum curso em andamento no momento.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Próximos Cursos -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-clock me-2"></i>
+                    Próximos Cursos
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if cursos_proximos %}
+                    <div class="list-group list-group-flush">
+                        {% for curso in cursos_proximos %}
+                        <div class="list-group-item border-0">
+                            <div class="d-flex w-100 justify-content-between">
+                                <h6 class="mb-1">{{ curso['NOME CURSO'] }}</h6>
+                                <small class="text-warning">
+                                    <i class="bi bi-calendar-event me-1"></i>
+                                    {{ curso['DATA INICIO'].strftime('%d/%m/%Y') if curso['DATA INICIO'] else 'Em breve' }}
+                                </small>
+                            </div>
+                            <p class="mb-1">
+                                <i class="bi bi-clock me-1"></i>
+                                {{ curso['CARGA HORÁRIA'] }}h de duração
+                            </p>
+                            <small class="text-muted">{{ curso['SITUACAO DA TURMA'] }}</small>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-calendar-x text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nenhum curso agendado.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Últimos Certificados -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-trophy me-2"></i>
+                    Certificados Recentes
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if cursos_concluidos %}
+                    <div class="row">
+                        {% for curso in cursos_concluidos[:3] %}
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 course-card course-completed">
+                                <div class="card-body text-center">
+                                    <i class="bi bi-award text-success mb-3" style="font-size: 2.5rem;"></i>
+                                    <h6 class="card-title">{{ curso['NOME CURSO'] }}</h6>
+                                    <p class="card-text">
+                                        <small class="text-muted">
+                                            Concluído em {{ curso['DATA FINAL'].strftime('%d/%m/%Y') if curso['DATA FINAL'] else 'Data não definida' }}
+                                        </small>
+                                    </p>
+                                    <button class="btn btn-outline-success btn-sm">
+                                        <i class="bi bi-download me-1"></i>
+                                        Download
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-trophy text-muted" style="font-size: 3rem;"></i>
+                        <p class="text-muted mt-2">Nenhum certificado disponível ainda.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

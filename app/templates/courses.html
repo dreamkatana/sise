@@ -1,0 +1,199 @@
+{% extends "base.html" %}
+
+{% block title %}Meus Cursos - SISE{% endblock %}
+{% block page_title %}Meus Cursos{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="h4 mb-3">Meus Cursos</h2>
+        <p class="text-muted">Visualize todos os seus cursos organizados por status.</p>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <div class="btn-group" role="group" aria-label="Filtro de cursos">
+                            <input type="radio" class="btn-check" name="status-filter" id="all" autocomplete="off" checked>
+                            <label class="btn btn-outline-primary" for="all">Todos</label>
+
+                            <input type="radio" class="btn-check" name="status-filter" id="progress" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="progress">Em Andamento</label>
+
+                            <input type="radio" class="btn-check" name="status-filter" id="completed" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="completed">Concluídos</label>
+
+                            <input type="radio" class="btn-check" name="status-filter" id="upcoming" autocomplete="off">
+                            <label class="btn btn-outline-primary" for="upcoming">Próximos</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" placeholder="Buscar curso..." id="search-input">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Lista de Cursos -->
+<div class="row" id="courses-container">
+    {% for curso in cursos %}
+    <div class="col-lg-6 col-xl-4 mb-4 course-item" data-status="{{ curso.status }}" data-name="{{ curso['NOME CURSO']|lower }}">
+        <div class="card h-100 course-card {% if curso.status == 'progress' %}course-progress{% elif curso.status == 'completed' %}course-completed{% elif curso.status == 'upcoming' %}course-upcoming{% endif %}">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span class="badge {% if curso.status == 'progress' %}bg-primary{% elif curso.status == 'completed' %}bg-success{% elif curso.status == 'upcoming' %}bg-warning text-dark{% endif %}">
+                    {% if curso.status == 'progress' %}Em Andamento{% elif curso.status == 'completed' %}Concluído{% elif curso.status == 'upcoming' %}Próximo{% endif %}
+                </span>
+                <small class="text-muted">Código: {{ curso['CÓDIGO CURSO'] }}</small>
+            </div>
+            <div class="card-body">
+                <h6 class="card-title">{{ curso['NOME CURSO'] }}</h6>
+                
+                <div class="mb-3">
+                    <p class="card-text mb-2">
+                        <i class="bi bi-calendar-start me-2"></i>
+                        <strong>Início:</strong> {{ curso['DATA INICIO'].strftime('%d/%m/%Y') if curso['DATA INICIO'] else 'Não definido' }}
+                    </p>
+                    <p class="card-text mb-2">
+                        <i class="bi bi-calendar-end me-2"></i>
+                        <strong>Término:</strong> {{ curso['DATA FINAL'].strftime('%d/%m/%Y') if curso['DATA FINAL'] else 'Não definido' }}
+                    </p>
+                    <p class="card-text mb-2">
+                        <i class="bi bi-clock me-2"></i>
+                        <strong>Carga Horária:</strong> {{ curso['CARGA HORÁRIA'] }}h
+                    </p>
+                    <p class="card-text mb-2">
+                        <i class="bi bi-person-badge me-2"></i>
+                        <strong>Turma:</strong> {{ curso['CÓDIGO TURMA'] }}
+                    </p>
+                </div>
+
+                {% if curso.status == 'progress' %}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <small>Progresso</small>
+                        <small>50%</small>
+                    </div>
+                    <div class="progress" style="height: 8px;">
+                        <div class="progress-bar bg-primary" role="progressbar" style="width: 50%"></div>
+                    </div>
+                </div>
+                {% endif %}
+
+                {% if curso['QUANTIDADE DE FALTAS'] is not none %}
+                <div class="mb-3">
+                    <p class="card-text mb-1">
+                        <i class="bi bi-exclamation-triangle me-2 text-warning"></i>
+                        <strong>Faltas:</strong> {{ curso['QUANTIDADE DE FALTAS'] }}
+                    </p>
+                    {% if curso['HORAS_FALTA'] %}
+                    <p class="card-text mb-1">
+                        <i class="bi bi-clock-history me-2"></i>
+                        <strong>Horas de Falta:</strong> {{ curso['HORAS_FALTA'] }}h
+                    </p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <div class="mt-auto">
+                    <p class="card-text">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            {{ curso['SITUACAO DA TURMA'] }}
+                        </small>
+                    </p>
+                </div>
+            </div>
+            <div class="card-footer bg-transparent">
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    {% if curso.status == 'completed' %}
+                    <button class="btn btn-outline-success btn-sm">
+                        <i class="bi bi-download me-1"></i> Certificado
+                    </button>
+                    {% elif curso.status == 'progress' %}
+                    <button class="btn btn-primary btn-sm">
+                        <i class="bi bi-play me-1"></i> Continuar
+                    </button>
+                    {% endif %}
+                    <button class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-eye me-1"></i> Detalhes
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Mensagem quando não há cursos -->
+<div class="row d-none" id="no-courses-message">
+    <div class="col-12">
+        <div class="text-center py-5">
+            <i class="bi bi-book text-muted" style="font-size: 4rem;"></i>
+            <h4 class="text-muted mt-3">Nenhum curso encontrado</h4>
+            <p class="text-muted">Tente ajustar os filtros ou entre em contato com a coordenação.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterButtons = document.querySelectorAll('input[name="status-filter"]');
+    const searchInput = document.getElementById('search-input');
+    const coursesContainer = document.getElementById('courses-container');
+    const noCoursesMessage = document.getElementById('no-courses-message');
+    
+    function filterCourses() {
+        const selectedStatus = document.querySelector('input[name="status-filter"]:checked').id;
+        const searchTerm = searchInput.value.toLowerCase();
+        const courseItems = document.querySelectorAll('.course-item');
+        let visibleCount = 0;
+        
+        courseItems.forEach(item => {
+            const status = item.dataset.status;
+            const name = item.dataset.name;
+            
+            const statusMatch = selectedStatus === 'all' || status === selectedStatus;
+            const searchMatch = name.includes(searchTerm);
+            
+            if (statusMatch && searchMatch) {
+                item.style.display = 'block';
+                visibleCount++;
+            } else {
+                item.style.display = 'none';
+            }
+        });
+        
+        // Mostrar/ocultar mensagem de "nenhum curso"
+        if (visibleCount === 0) {
+            coursesContainer.classList.add('d-none');
+            noCoursesMessage.classList.remove('d-none');
+        } else {
+            coursesContainer.classList.remove('d-none');
+            noCoursesMessage.classList.add('d-none');
+        }
+    }
+    
+    // Event listeners
+    filterButtons.forEach(button => {
+        button.addEventListener('change', filterCourses);
+    });
+    
+    searchInput.addEventListener('input', filterCourses);
+    
+    // Filtro inicial
+    filterCourses();
+});
+</script>
+{% endblock %}
