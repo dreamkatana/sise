@@ -120,9 +120,9 @@
                                         </small>
                                     </p>
                                     <div class="progress mb-2" style="height: 5px;">
-                                        <div class="progress-bar" role="progressbar" style="width: 50%"></div>
+                                        <div class="progress-bar" role="progressbar" style="width: {{ curso.progress_percentage }}%"></div>
                                     </div>
-                                    <small class="text-muted">50% concluído</small>
+                                    <small class="text-muted">{{ curso.progress_percentage }}% concluído</small>
                                 </div>
                             </div>
                         </div>

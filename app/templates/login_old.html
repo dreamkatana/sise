@@ -65,6 +65,8 @@
             margin-top: 1.5rem;
             border-left: 4px solid #667eea;
         }
+            background-color: #e9ecef;
+        }
     </style>
 </head>
 <body>
@@ -75,13 +77,12 @@
                     <div class="login-header">
                         <h1 class="h3 mb-2">
                             <i class="bi bi-mortarboard me-2"></i>
-                            SISE
+                            PDG
                         </h1>
-                        <p class="mb-0">Sistema Integrado de Serviços Educacionais</p>
-                        <p class="small opacity-75 mb-0">UNICAMP</p>
+                        <p class="mb-0">EDUCORP - UNICAMP</p>
                     </div>
                     
-                    <div class="login-body">
+                    <div class="p-4">
                         {% with messages = get_flashed_messages(with_categories=true) %}
                             {% if messages %}
                                 {% for category, message in messages %}
@@ -93,20 +94,54 @@
                             {% endif %}
                         {% endwith %}
                         
-                        <h4 class="mb-3">Acesso Seguro</h4>
-                        <p class="text-muted mb-4">
-                            Use suas credenciais da UNICAMP para acessar o sistema
-                        </p>
+                        <form method="POST" action="{{ url_for('lms.login') }}">
+                            <div class="mb-3">
+                                <label for="email" class="form-label">
+                                    <i class="bi bi-envelope me-1"></i>
+                                    Email
+                                </label>
+                                <input type="email" class="form-control" id="email" name="email" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="password" class="form-label">
+                                    <i class="bi bi-lock me-1"></i>
+                                    Senha
+                                </label>
+                                <input type="password" class="form-control" id="password" name="password" required>
+                            </div>
+                            
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-box-arrow-in-right me-2"></i>
+                                    Entrar
+                                </button>
+                            </div>
+                        </form>
                         
-                        <a href="{{ url_for('auth.login') }}" class="keycloak-btn">
-                            <i class="bi bi-shield-lock me-2"></i>
-                            Entrar com UNICAMP
-                        </a>
+                        <!-- Usuários Demo -->
+                        <div class="demo-users">
+                            <h6 class="mb-2">
+                                <i class="bi bi-person-gear me-1"></i>
+                                Usuários de Demonstração
+                            </h6>
+                            <small class="text-muted mb-2 d-block">Clique para fazer login automaticamente:</small>
+                            
+                            <div class="demo-user" onclick="loginAs('aluno@unicamp.br', 'Estudante Demo')">
+                                <i class="bi bi-person me-2"></i>
+                                <strong>Estudante:</strong> aluno@unicamp.br
+                            </div>
+                            
+                            <div class="demo-user" onclick="loginAs('joaoedu@unicamp.br', 'João Eduardo (Admin)')">
+                                <i class="bi bi-person-badge me-2"></i>
+                                <strong>Administrador:</strong> joaoedu@unicamp.br
+                            </div>
+                        </div>
                         
-                        <div class="unicamp-info">
+                        <div class="text-center mt-3">
                             <small class="text-muted">
                                 <i class="bi bi-info-circle me-1"></i>
-                                <strong>Acesso Institucional:</strong> Utilize o mesmo login e senha do seu email institucional da UNICAMP
+                                Sistema em desenvolvimento - Login temporário ativo
                             </small>
                         </div>
                     </div>
@@ -117,5 +152,17 @@
 
     <!-- Bootstrap JS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        function loginAs(email, name) {
+            document.getElementById('email').value = email;
+            document.getElementById('password').value = 'demo123';
+            
+            // Auto submit após um pequeno delay para feedback visual
+            setTimeout(() => {
+                document.querySelector('form').submit();
+            }, 200);
+        }
+    </script>
 </body>
 </html>

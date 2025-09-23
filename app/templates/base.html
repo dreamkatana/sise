@@ -259,14 +259,14 @@
                 .catch(error => {
                     console.error('Erro no logout:', error);
                     // Fallback para logout normal
-                    window.location.href = "{{ url_for('lms.logout') }}";
+                    window.location.href = "{{ url_for('auth.logout') }}";
                 });
             }
         }
         
         // Função para logout simples (sem confirmação) - pode ser usada em botões específicos
         function simpleLogout() {
-            window.location.href = "{{ url_for('lms.logout') }}";
+            window.location.href = "{{ url_for('auth.logout') }}";
         }
     </script>
     

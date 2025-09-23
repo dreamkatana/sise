@@ -1,5 +1,10 @@
 {
-    "codcua_order": [623, 722, 769, 804],
+    "codcua_order": [
+        "623",
+        "722",
+        "769",
+        "804"
+    ],
     "admin_emails": [
         "joaoedu@unicamp.br",
         "admin@unicamp.br"
