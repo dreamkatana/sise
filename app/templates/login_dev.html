@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - SISE</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        
+        .login-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            max-width: 450px;
+            width: 100%;
+        }
+        
+        .login-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+        }
+        
+        .login-body {
+            padding: 2rem;
+        }
+        
+        .keycloak-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+            width: 100%;
+        }
+        
+        .keycloak-btn:hover {
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .dev-section {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            border-left: 4px solid #667eea;
+        }
+        
+        .or-divider {
+            text-align: center;
+            margin: 1.5rem 0;
+            position: relative;
+        }
+        
+        .or-divider::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: #dee2e6;
+        }
+        
+        .or-divider span {
+            background: white;
+            padding: 0 1rem;
+            color: #6c757d;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-6 col-lg-5">
+                <div class="login-card">
+                    <div class="login-header">
+                        <h1 class="h3 mb-2">
+                            <i class="bi bi-mortarboard me-2"></i>
+                            SISE
+                        </h1>
+                        <p class="mb-0">Sistema Integrado de Serviços Educacionais</p>
+                        <p class="small opacity-75 mb-0">UNICAMP</p>
+                    </div>
+                    
+                    <div class="login-body">
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+                        
+                        <!-- Ambiente de Desenvolvimento -->
+                        <div class="dev-section">
+                            <h6 class="mb-3">
+                                <i class="bi bi-tools me-2"></i>
+                                Ambiente de Desenvolvimento
+                            </h6>
+                            
+                            <form method="POST" action="{{ url_for('auth.direct_login') }}" id="loginForm">
+                                <div class="mb-3">
+                                    <label for="username" class="form-label">
+                                        <i class="bi bi-person me-1"></i>
+                                        Username UNICAMP
+                                    </label>
+                                    <input type="text" class="form-control" id="username" name="username" 
+                                           placeholder="joaoedu" required>
+                                    <small class="text-muted">Apenas o nome de usuário (sem @unicamp.br)</small>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="password" class="form-label">
+                                        <i class="bi bi-lock me-1"></i>
+                                        Senha
+                                    </label>
+                                    <input type="password" class="form-control" id="password" name="password" required>
+                                </div>
+                                
+                                <button type="submit" class="keycloak-btn" disabled id="loginBtn">
+                                    <i class="bi bi-shield-lock me-2"></i>
+                                    <span id="btnText">Conectando...</span>
+                                </button>
+                            </form>
+                            
+                            <div class="mt-3">
+                                <small class="text-muted">
+                                    <i class="bi bi-info-circle me-1"></i>
+                                    <strong>Desenvolvimento:</strong> Use suas credenciais institucionais da UNICAMP
+                                </small>
+                            </div>
+                        </div>
+                        
+                        <!-- <div class="or-divider">
+                            <span>OU</span>
+                        </div>
+                        
+                        <div class="text-center">
+                            <a href="{{ url_for('auth.login') }}" class="keycloak-btn">
+                                <i class="bi bi-globe me-2"></i>
+                                Acesso via Portal UNICAMP
+                            </a>
+                            <small class="d-block mt-2 text-muted">
+                                Redirecionamento para autenticação oficial
+                            </small>
+                        </div> -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginBtn = document.getElementById('loginBtn');
+            const btnText = document.getElementById('btnText');
+            const form = document.getElementById('loginForm');
+            
+            // Habilita o botão após carregamento
+            loginBtn.disabled = false;
+            btnText.textContent = 'Entrar com UNICAMP';
+            
+            form.addEventListener('submit', function(e) {
+                loginBtn.disabled = true;
+                btnText.textContent = 'Autenticando...';
+            });
+        });
+    </script>
+</body>
+</html>

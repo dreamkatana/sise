@@ -4,6 +4,8 @@ from config.config import Config
 from functools import wraps
 import secrets
 import base64
+import urllib.parse
+import requests
 
 auth_bp = Blueprint('auth', __name__)
 
@@ -53,12 +55,20 @@ def get_authorization_url():
     # URL de redirecionamento após login
     redirect_uri = url_for('auth.callback', _external=True)
     
-    # Constrói a URL de autorização
-    auth_url = keycloak_openid.auth_url(
-        redirect_uri=redirect_uri,
-        scope="openid email profile",
-        state=state
-    )
+    # Constrói a URL de autorização manualmente (método mais compatível)
+    auth_url = f"{Config.KEYCLOAK_SERVER_URL}/realms/{Config.KEYCLOAK_REALM}/protocol/openid-connect/auth"
+    
+    # Parâmetros da URL
+    params = {
+        'client_id': Config.KEYCLOAK_CLIENT_ID,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': 'openid email profile',
+        'state': state
+    }
+    
+    # Codifica os parâmetros
+    auth_url += '?' + urllib.parse.urlencode(params)
     
     return auth_url
 
@@ -71,20 +81,92 @@ def exchange_code_for_token(code, state):
     # URL de redirecionamento (deve ser a mesma usada na autorização)
     redirect_uri = url_for('auth.callback', _external=True)
     
-    # Troca o código pelo token
-    token = keycloak_openid.token(
-        grant_type='authorization_code',
-        code=code,
-        redirect_uri=redirect_uri
-    )
-    
-    return token
+    try:
+        # Troca o código pelo token usando a biblioteca python-keycloak
+        token = keycloak_openid.token(
+            grant_type='authorization_code',
+            code=code,
+            redirect_uri=redirect_uri
+        )
+        return token
+    except Exception as e:
+        # Se falhar com a biblioteca, tenta fazer request direto
+        token_url = f"{Config.KEYCLOAK_SERVER_URL}/realms/{Config.KEYCLOAK_REALM}/protocol/openid-connect/token"
+        
+        data = {
+            'grant_type': 'authorization_code',
+            'client_id': Config.KEYCLOAK_CLIENT_ID,
+            'client_secret': Config.KEYCLOAK_CLIENT_SECRET,
+            'code': code,
+            'redirect_uri': redirect_uri
+        }
+        
+        response = requests.post(token_url, data=data)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Erro ao trocar código por token: {response.text}")
 
 @auth_bp.route('/login')
 def login():
     """Redireciona para o Keycloak para autenticação"""
-    auth_url = get_authorization_url()
-    return redirect(auth_url)
+    # Para desenvolvimento local, usa formulário de login direto
+    # Em produção, mudaria para redirect para Keycloak
+    return redirect(url_for('lms.login_page'))
+
+@auth_bp.route('/direct-login', methods=['POST'])
+def direct_login():
+    """Login direto usando Resource Owner Password Credentials (para desenvolvimento)"""
+    try:
+        username = request.form.get('username') or request.json.get('username')
+        password = request.form.get('password') or request.json.get('password')
+        
+        if not username or not password:
+            flash('Username e password são obrigatórios', 'error')
+            return redirect(url_for('lms.login_page'))
+        
+        # Faz login direto no Keycloak usando Resource Owner Password Credentials
+        token_data = keycloak_openid.token(username, password)
+        
+        # Obtém informações do usuário
+        userinfo = keycloak_openid.userinfo(token_data['access_token'])
+        
+        # Armazena informações do usuário na sessão
+        session['user_email'] = userinfo.get('email')
+        session['user_name'] = userinfo.get('name', userinfo.get('preferred_username'))
+        session['access_token'] = token_data['access_token']
+        session['refresh_token'] = token_data.get('refresh_token')
+        
+        # Verifica se é admin
+        admin_emails = ['joaoedu@unicamp.br']
+        session['is_admin'] = userinfo.get('email') in admin_emails
+        
+        flash(f'Login realizado com sucesso! Bem-vindo, {session["user_name"]}!', 'success')
+        
+        # Resposta diferente para requests AJAX vs formulário
+        if request.is_json or request.headers.get('Content-Type') == 'application/json':
+            return jsonify({
+                'success': True,
+                'message': 'Login realizado com sucesso!',
+                'redirect': url_for('lms.dashboard'),
+                'user': {
+                    'email': session['user_email'],
+                    'name': session['user_name'],
+                    'is_admin': session['is_admin']
+                }
+            })
+        else:
+            return redirect(url_for('lms.dashboard'))
+        
+    except Exception as e:
+        error_msg = f'Erro ao fazer login: {str(e)}'
+        flash(error_msg, 'error')
+        
+        if request.is_json or request.headers.get('Content-Type') == 'application/json':
+            return jsonify({'success': False, 'error': error_msg}), 401
+        else:
+            return redirect(url_for('lms.login_page'))
 
 @auth_bp.route('/callback')
 def callback():

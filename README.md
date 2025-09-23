@@ -1,6 +1,169 @@
-# SISE Flask - LMS Educacional
+# SISE Flask - Sistema Integrado de Serviços Educacionais
 
-Sistema de Gerenciamento de Aprendizagem (LMS) integrado com Red Hat SSO (SISE) usando python-keycloak.
+Sistema Flask integrado com Keycloak para autenticação e consulta de dados educacionais da UNICAMP.
+
+## 🚀 Deploy em Produção
+
+### Pré-requisitos
+- Docker e Docker Compose instalados
+- Acesso ao servidor de banco de dados
+- Configurações do Keycloak atualizadas
+
+### 1. Configuração
+1. Edite o arquivo `.env.production` com suas configurações:
+```bash
+# Banco de dados
+DB_HOST=seu-servidor-db
+DB_USERNAME=usuario
+DB_PASS=senha
+DB_NAME=nome_banco
+
+# Keycloak - Configure no console do Keycloak:
+# Redirect URI: https://servicos.educorp.unicamp.br/pdg/api/auth/callback
+KEYCLOAK_CLIENT_SECRET=seu-client-secret
+
+# Segurança
+SECRET_KEY=sua-chave-secreta-forte
+```
+
+2. No console do Keycloak, configure:
+   - **Valid Redirect URIs**: `https://servicos.educorp.unicamp.br/pdg/api/auth/callback`
+   - **Web Origins**: `https://servicos.educorp.unicamp.br`
+
+### 2. Deploy com Docker
+
+#### Opção A: Script Automático
+```bash
+chmod +x deploy.sh
+./deploy.sh production
+```
+
+#### Opção B: Manual
+```bash
+# Build e start
+docker-compose up -d --build
+
+# Verificar logs
+docker-compose logs -f sise-app
+
+# Verificar status
+docker-compose ps
+```
+
+### 3. Verificação
+- Aplicação disponível em: `http://localhost:5006` (ou porta configurada)
+- Health check: `http://localhost:5006/api`
+- Login: `http://localhost:5006/login`
+
+### 4. Configuração do Reverse Proxy
+Configure seu servidor web (nginx/apache) para proxy reverso:
+
+#### Nginx
+```nginx
+location /pdg {
+    proxy_pass http://localhost:5006;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+## 🛠️ Desenvolvimento
+
+### Executar localmente
+```bash
+# Ativar ambiente virtual
+.venv\Scripts\activate  # Windows
+source .venv/bin/activate  # Linux/Mac
+
+# Instalar dependências
+pip install -r requirements.txt
+
+# Configurar ambiente
+cp .env.example .env
+
+# Executar
+python run.py
+```
+
+### Docker para desenvolvimento
+```bash
+docker-compose -f docker-compose.dev.yml up --build
+```
+
+## 📊 Monitoramento
+
+### Logs
+```bash
+# Ver logs em tempo real
+docker-compose logs -f sise-app
+
+# Ver últimas 100 linhas
+docker-compose logs --tail=100 sise-app
+```
+
+### Health Check
+```bash
+curl -f http://localhost:5006/api
+```
+
+### Métricas do Container
+```bash
+docker stats sise-flask-prod
+```
+
+## 🔧 Manutenção
+
+### Atualizar aplicação
+```bash
+git pull
+./deploy.sh production
+```
+
+### Backup do banco
+```bash
+# Criar backup
+docker exec sise-mariadb mysqldump -u root -p sise_db > backup.sql
+
+# Restaurar backup
+docker exec -i sise-mariadb mysql -u root -p sise_db < backup.sql
+```
+
+### Limpar Docker
+```bash
+# Parar tudo
+docker-compose down
+
+# Limpar volumes órfãos
+docker volume prune
+
+# Limpar imagens não utilizadas
+docker image prune -a
+```
+
+## 🔐 Segurança
+
+- ✅ HTTPS enforced
+- ✅ Secure cookies
+- ✅ Non-root user no container
+- ✅ Health checks configurados
+- ✅ Logs estruturados
+- ✅ Secrets via environment variables
+
+## 📞 Suporte
+
+Para problemas ou dúvidas:
+1. Verificar logs: `docker-compose logs sise-app`
+2. Verificar health check: `curl http://localhost:5006/api`
+3. Verificar configurações de rede e Keycloak
+
+## 🎯 URLs de Produção
+
+- **Aplicação**: https://servicos.educorp.unicamp.br/pdg
+- **Login**: https://servicos.educorp.unicamp.br/pdg/login
+- **Dashboard**: https://servicos.educorp.unicamp.br/pdg/dashboard
+- **API**: https://servicos.educorp.unicamp.br/pdg/api
 
 ## Funcionalidades
 

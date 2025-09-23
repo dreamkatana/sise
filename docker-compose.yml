@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  sise-app:
+    build: .
+    container_name: sise-flask-prod
+    restart: unless-stopped
+    ports:
+      - "5006:5006"
+    env_file:
+      - .env.production
+    environment:
+      - FLASK_ENV=production
+    networks:
+      - sise-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5006/api"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  sise-network:
+    driver: bridge
+
+# Para usar um banco de dados separado (opcional):
+# volumes:
+#   mysql_data:
+#     driver: local
+
+# services:
+#   sise-db:
+#     image: mariadb:10.6
+#     container_name: sise-mariadb
+#     restart: unless-stopped
+#     environment:
+#       MYSQL_ROOT_PASSWORD: root_password_here
+#       MYSQL_DATABASE: sise_db
+#       MYSQL_USER: sise_user
+#       MYSQL_PASSWORD: sise_password
+#     volumes:
+#       - mysql_data:/var/lib/mysql
+#     networks:
+#       - sise-network
+#     ports:
+#       - "3306:3306"
