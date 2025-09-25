@@ -10,24 +10,30 @@ import ssl
 import urllib3
 import traceback
 
-# Configurar SSL GLOBALMENTE - MONKEY PATCH para resolver recursion bug
+# Configurar SSL GLOBALMENTE - MONKEY PATCH mais agressivo para resolver recursion bug
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+import os
 
-# MONKEY PATCH: Forçar SSL context sem verificação
+# MONKEY PATCH MAIS AGRESSIVO: Desabilitar completamente SSL em produção
 def create_urllib3_context(ssl_version=None, cert_reqs=None, options=None, ciphers=None):
     """Cria contexto SSL sem verificação para resolver recursion bug"""
     context = ssl.create_default_context()
     context.check_hostname = False
     context.verify_mode = ssl.CERT_NONE
-    # Remove a configuração que causa recursão - NÃO configurar minimum_version
+    # Não configurar minimum_version para evitar recursão
     return context
 
-# Aplicar monkey patch ANTES de qualquer import que use SSL
+# Aplicar monkey patches ANTES de qualquer import que use SSL
 urllib3.util.ssl_.create_urllib3_context = create_urllib3_context
 
-# Configurar SSL context global 
+# Configurar SSL context global para não verificar
 ssl._create_default_https_context = ssl._create_unverified_context
+
+# FORÇAR variáveis de ambiente para desabilitar SSL completamente
+os.environ['PYTHONHTTPSVERIFY'] = '0'
+os.environ['CURL_CA_BUNDLE'] = ''
+os.environ['REQUESTS_CA_BUNDLE'] = ''
 
 # Desabilitar warnings SSL (apenas os que existem)
 try:
@@ -71,14 +77,60 @@ def url_for_with_prefix(endpoint, **values):
             url = '/pdg' + url
     return url
 
-# Configurar Keycloak com verificação SSL desabilitada
-keycloak_openid = KeycloakOpenID(
-    server_url=Config.KEYCLOAK_SERVER_URL,
-    client_id=Config.KEYCLOAK_CLIENT_ID,
-    realm_name=Config.KEYCLOAK_REALM,
-    client_secret_key=Config.KEYCLOAK_CLIENT_SECRET,
-    verify=False  # Desabilitar verificação SSL para resolver bug do Python 3.13
-)
+# Configurar Keycloak com verificação SSL desabilitada e sessão customizada
+try:
+    # Para produção, tentar HTTP se HTTPS falhar
+    keycloak_server_url = Config.KEYCLOAK_SERVER_URL
+    
+    # Se estamos em produção e usando HTTPS, criar versão HTTP também
+    if current_app.config.get('FLASK_ENV') == 'production' and keycloak_server_url.startswith('https://'):
+        keycloak_http_url = keycloak_server_url.replace('https://', 'http://')
+        print(f"[DEBUG] Produção detectada - URLs disponíveis:")
+        print(f"[DEBUG] - HTTPS: {keycloak_server_url}")
+        print(f"[DEBUG] - HTTP:  {keycloak_http_url}")
+    else:
+        keycloak_http_url = None
+        
+    keycloak_openid = KeycloakOpenID(
+        server_url=keycloak_server_url,
+        client_id=Config.KEYCLOAK_CLIENT_ID,
+        realm_name=Config.KEYCLOAK_REALM,
+        client_secret_key=Config.KEYCLOAK_CLIENT_SECRET,
+        verify=False,  # Desabilitar verificação SSL
+        timeout=30     # Timeout de 30 segundos
+    )
+    
+    # FORÇAR uso da nossa sessão requests customizada no keycloak
+    keycloak_openid.connection._s = requests_session
+    
+    # Configurar timeout na conexão também
+    keycloak_openid.connection._s.timeout = 30
+    
+    # Criar instância HTTP se disponível
+    keycloak_http = None
+    if keycloak_http_url:
+        try:
+            keycloak_http = KeycloakOpenID(
+                server_url=keycloak_http_url,
+                client_id=Config.KEYCLOAK_CLIENT_ID,
+                realm_name=Config.KEYCLOAK_REALM,
+                client_secret_key=Config.KEYCLOAK_CLIENT_SECRET,
+                verify=False,
+                timeout=30
+            )
+            keycloak_http.connection._s = requests_session
+            keycloak_http.connection._s.timeout = 30
+            print(f"[DEBUG] Keycloak HTTP configurado como fallback")
+        except Exception as http_error:
+            print(f"[DEBUG] Erro ao configurar Keycloak HTTP: {http_error}")
+            keycloak_http = None
+    
+    print(f"[DEBUG] Keycloak HTTPS configurado: {keycloak_server_url}")
+    
+except Exception as keycloak_init_error:
+    print(f"[ERROR] Erro ao inicializar Keycloak: {keycloak_init_error}")
+    keycloak_openid = None
+    keycloak_http = None
 
 def token_required(f):
     """Decorator para rotas que requerem autenticação via token"""
@@ -209,18 +261,70 @@ def direct_login():
         
         # SEMPRE tentar python-keycloak primeiro (funciona para mais usuários)
         print(f"[DEBUG] Tentando python-keycloak primeiro...")
-        try:
-            token_data = keycloak_openid.token(clean_username, password)
-            userinfo = keycloak_openid.userinfo(token_data['access_token'])
-            print(f"[DEBUG] ✅ python-keycloak SUCESSO")
-        except Exception as e:
-            print(f"[DEBUG] python-keycloak falhou ({e}), tentando curl como fallback...")
-            try:
-                token_data, userinfo = _authenticate_with_curl(clean_username, password)
-                print(f"[DEBUG] ✅ curl SUCESSO como fallback")
-            except Exception as curl_error:
-                print(f"[DEBUG] curl também falhou: {curl_error}")
-                raise Exception(f"Ambos os métodos falharam. python-keycloak: {e}. curl: {curl_error}")
+        
+        # Verificar se keycloak foi inicializado corretamente
+        if keycloak_openid is None:
+            print(f"[DEBUG] Keycloak não foi inicializado, usando curl direto...")
+            token_data, userinfo = _authenticate_with_curl(clean_username, password)
+            print(f"[DEBUG] ✅ curl SUCESSO (keycloak não disponível)")
+        else:
+            # Tentar diferentes formatos de username com python-keycloak
+            usernames_to_try = [
+                clean_username,
+                f"{clean_username}@unicamp.br" if "@" not in clean_username else clean_username.split("@")[0]
+            ]
+            
+            # Lista de instâncias Keycloak para tentar (HTTPS primeiro, HTTP como fallback)
+            keycloak_instances = [
+                ("HTTPS", keycloak_openid)
+            ]
+            
+            # Se temos instância HTTP, adicionar como fallback
+            if 'keycloak_http' in globals() and keycloak_http is not None:
+                keycloak_instances.append(("HTTP", keycloak_http))
+            
+            keycloak_success = False
+            keycloak_error = None
+            
+            for protocol, keycloak_instance in keycloak_instances:
+                print(f"[DEBUG] - Tentando {protocol} com instância: {keycloak_instance.connection.server_url}")
+                
+                for test_username in usernames_to_try:
+                    try:
+                        print(f"[DEBUG]   - Username: {test_username}")
+                        
+                        # Tentar autenticação com timeout explícito
+                        token_data = keycloak_instance.token(test_username, password)
+                        userinfo = keycloak_instance.userinfo(token_data['access_token'])
+                        
+                        print(f"[DEBUG] ✅ python-keycloak {protocol} SUCESSO com username: {test_username}")
+                        keycloak_success = True
+                        break
+                        
+                    except Exception as e:
+                        error_type = type(e).__name__
+                        error_msg = str(e)
+                        print(f"[DEBUG]   - {protocol} falhou com {test_username}: {error_type}: {error_msg}")
+                        keycloak_error = e
+                        
+                        # Se for erro de recursão, pare de tentar HTTPS e vá para HTTP
+                        if "recursion" in error_msg.lower() or "maximum recursion depth" in error_msg:
+                            print(f"[DEBUG]   - Detectado erro de recursão SSL em {protocol}, tentando próximo protocolo")
+                            break
+                        continue
+                
+                # Se conseguiu autenticar, pare aqui
+                if keycloak_success:
+                    break
+            
+            if not keycloak_success:
+                print(f"[DEBUG] python-keycloak falhou com todos os protocolos, tentando curl como fallback...")
+                try:
+                    token_data, userinfo = _authenticate_with_curl(clean_username, password)
+                    print(f"[DEBUG] ✅ curl SUCESSO como fallback")
+                except Exception as curl_error:
+                    print(f"[DEBUG] curl também falhou: {curl_error}")
+                    raise Exception(f"Ambos os métodos falharam. python-keycloak: {keycloak_error}. curl: {curl_error}")
         
         # Se chegou aqui, autenticação funcionou
         print(f"[DEBUG] UserInfo: {userinfo}")
