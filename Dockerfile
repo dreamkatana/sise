@@ -1,5 +1,5 @@
-# Use Python 3.13 slim image
-FROM python:3.13-slim
+# Use Python 3.11 slim image (more stable than 3.13)
+FROM python:3.11-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -16,6 +16,7 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     libmariadb-dev \
     libmariadb-dev-compat \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements first for better caching
@@ -35,10 +36,6 @@ USER app
 
 # Expose port
 EXPOSE 5006
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:5006/api || exit 1
 
 # Run gunicorn
 CMD ["gunicorn", "--config", "gunicorn.conf.py", "wsgi:app"]

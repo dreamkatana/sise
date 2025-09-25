@@ -221,7 +221,7 @@ def logout_ajax():
         return jsonify({
             'success': True, 
             'message': 'Redirecionando para logout...',
-            'redirect': url_for('auth.logout')
+            'redirect': url_for('auth.logout', _external=False)
         })
     else:
         return jsonify({

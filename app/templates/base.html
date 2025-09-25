@@ -258,16 +258,25 @@
                 })
                 .catch(error => {
                     console.error('Erro no logout:', error);
-                    // Fallback para logout normal
-                    window.location.href = "{{ url_for('auth.logout') }}";
+                    // Fallback para logout normal - FORÇA URL correta
+                    const fallbackUrl = "/pdg{{ url_for('auth.logout') }}";
+                    console.log('DEBUG: Usando fallback URL com prefixo forçado:', fallbackUrl);
+                    window.location.href = fallbackUrl;
                 });
             }
         }
         
         // Função para logout simples (sem confirmação) - pode ser usada em botões específicos
         function simpleLogout() {
-            window.location.href = "{{ url_for('auth.logout') }}";
+            // FORÇA URL correta com prefixo /pdg
+            const logoutUrl = "/pdg{{ url_for('auth.logout') }}";
+            console.log('DEBUG: Logout URL com prefixo forçado:', logoutUrl);
+            window.location.href = logoutUrl;
         }
+        
+        // DEBUG: Mostrar URL de logout no console ao carregar a página
+        console.log('DEBUG: URL de logout original:', "{{ url_for('auth.logout') }}");
+        console.log('DEBUG: URL de logout com prefixo forçado:', "/pdg{{ url_for('auth.logout') }}");
     </script>
     
     {% block extra_js %}{% endblock %}

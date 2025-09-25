@@ -1,0 +1,7 @@
+web:
+  build: .
+  ports:
+    - "5006:5006"
+  environment:
+    - FLASK_ENV=production
+  restart: unless-stopped

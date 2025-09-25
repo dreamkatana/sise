@@ -1,33 +1,15 @@
-version: '3.8'
+version: '2'
 
 services:
-  sise-app:
+  web:
     build: .
-    container_name: sise-flask-prod
-    restart: unless-stopped
     ports:
       - "5006:5006"
     env_file:
       - .env.production
     environment:
       - FLASK_ENV=production
-    networks:
-      - sise-network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5006/api"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-networks:
-  sise-network:
-    driver: bridge
+    restart: unless-stopped
 
 # Para usar um banco de dados separado (opcional):
 # volumes:
