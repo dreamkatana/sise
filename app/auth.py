@@ -200,34 +200,34 @@ def direct_login():
         clean_username = username.replace('@unicamp.br', '') if '@unicamp.br' in username else username
         print(f"[DEBUG] Clean username: {clean_username}")
         
-        # DETECÇÃO INTELIGENTE: Produção usa CURL, Local usa python-keycloak
+        # MÉTODO HÍBRIDO: Tentar python-keycloak primeiro, curl como fallback (em ambos os ambientes)
         is_production = current_app.config.get('FLASK_ENV') == 'production'
         print(f"[DEBUG] Ambiente: {'PRODUÇÃO' if is_production else 'LOCAL'}")
         
         token_data = None
         userinfo = None
         
-        if is_production:
-            # PRODUÇÃO: Usar CURL direto (sabemos que funciona)
-            print(f"[DEBUG] PRODUÇÃO: Usando método CURL...")
-            token_data, userinfo = _authenticate_with_curl(clean_username, password)
-        else:
-            # LOCAL: Tentar python-keycloak primeiro, curl como fallback
-            print(f"[DEBUG] LOCAL: Tentando python-keycloak primeiro...")
+        # SEMPRE tentar python-keycloak primeiro (funciona para mais usuários)
+        print(f"[DEBUG] Tentando python-keycloak primeiro...")
+        try:
+            token_data = keycloak_openid.token(clean_username, password)
+            userinfo = keycloak_openid.userinfo(token_data['access_token'])
+            print(f"[DEBUG] ✅ python-keycloak SUCESSO")
+        except Exception as e:
+            print(f"[DEBUG] python-keycloak falhou ({e}), tentando curl como fallback...")
             try:
-                token_data = keycloak_openid.token(clean_username, password)
-                userinfo = keycloak_openid.userinfo(token_data['access_token'])
-                print(f"[DEBUG] LOCAL: python-keycloak SUCESSO")
-            except Exception as e:
-                print(f"[DEBUG] LOCAL: python-keycloak falhou ({e}), usando curl...")
                 token_data, userinfo = _authenticate_with_curl(clean_username, password)
+                print(f"[DEBUG] ✅ curl SUCESSO como fallback")
+            except Exception as curl_error:
+                print(f"[DEBUG] curl também falhou: {curl_error}")
+                raise Exception(f"Ambos os métodos falharam. python-keycloak: {e}. curl: {curl_error}")
         
         # Se chegou aqui, autenticação funcionou
         print(f"[DEBUG] UserInfo: {userinfo}")
         
         # Armazena informações do usuário na sessão
         session['user_email'] = userinfo.get('email')
-        session['user_name'] = userinfo.get('name', userinfo.get('preferred_username', userinfo.get('given_name', 'Usuário')))
+        session['user_name'] = userinfo.get('given_name')
         session['access_token'] = token_data['access_token']
         session['refresh_token'] = token_data.get('refresh_token')
         
@@ -382,7 +382,7 @@ def callback():
         
         # Armazena informações do usuário na sessão
         session['user_email'] = userinfo.get('email')
-        session['user_name'] = userinfo.get('name', userinfo.get('preferred_username'))
+        session['user_name'] = userinfo.get('given_name')
         session['access_token'] = token_data['access_token']
         session['refresh_token'] = token_data.get('refresh_token')
         
