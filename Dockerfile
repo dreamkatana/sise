@@ -26,7 +26,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code (includes certs/ directory)
 COPY . .
 
 # Create non-root user for security

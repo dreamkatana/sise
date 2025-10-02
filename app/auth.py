@@ -78,64 +78,121 @@ def url_for_with_prefix(endpoint, **values):
     return url
 
 # Configurar Keycloak com verificação SSL desabilitada e sessão customizada
-try:
-    # Para produção, tentar HTTP se HTTPS falhar
-    keycloak_server_url = Config.KEYCLOAK_SERVER_URL
+# Inicialização será feita quando necessário para evitar problemas de contexto
+keycloak_openid = None
+keycloak_http = None
+keycloak_http_url = None
+
+def initialize_keycloak():
+    """Inicializa instâncias Keycloak quando necessário (dentro do contexto da aplicação)"""
+    global keycloak_openid, keycloak_http, keycloak_http_url
     
-    # Se estamos em produção e usando HTTPS, criar versão HTTP também
-    if current_app.config.get('FLASK_ENV') == 'production' and keycloak_server_url.startswith('https://'):
-        keycloak_http_url = keycloak_server_url.replace('https://', 'http://')
-        print(f"[DEBUG] Produção detectada - URLs disponíveis:")
-        print(f"[DEBUG] - HTTPS: {keycloak_server_url}")
-        print(f"[DEBUG] - HTTP:  {keycloak_http_url}")
-    else:
-        keycloak_http_url = None
+    if keycloak_openid is not None:
+        return  # Já inicializado
+    
+    try:
+        # Para produção, tentar HTTP se HTTPS falhar
+        keycloak_server_url = Config.KEYCLOAK_SERVER_URL
         
-    keycloak_openid = KeycloakOpenID(
-        server_url=keycloak_server_url,
-        client_id=Config.KEYCLOAK_CLIENT_ID,
-        realm_name=Config.KEYCLOAK_REALM,
-        client_secret_key=Config.KEYCLOAK_CLIENT_SECRET,
-        verify=False,  # Desabilitar verificação SSL
-        timeout=30     # Timeout de 30 segundos
-    )
-    
-    # FORÇAR uso da nossa sessão requests customizada no keycloak
-    keycloak_openid.connection._s = requests_session
-    
-    # Configurar timeout na conexão também
-    keycloak_openid.connection._s.timeout = 30
-    
-    # Criar instância HTTP se disponível
-    keycloak_http = None
-    if keycloak_http_url:
+        # Criar versão HTTP se necessário
+        if keycloak_server_url.startswith('https://'):
+            keycloak_http_url = keycloak_server_url.replace('https://', 'http://')
+        
+        # Verificar se certificado existe e é válido
+        cert_path = "certs/authdevccuecunicampbr.crt"
+        use_cert = False
+        
+        import os
+        if os.path.exists(cert_path):
+            try:
+                # Tentar ler o certificado para verificar se é válido
+                with open(cert_path, 'r') as f:
+                    cert_content = f.read()
+                    if cert_content.strip() and ('BEGIN CERTIFICATE' in cert_content or 'BEGIN' in cert_content):
+                        use_cert = True
+                        print(f"[DEBUG] Certificado encontrado e válido: {cert_path}")
+                    else:
+                        print(f"[DEBUG] Certificado existe mas não é válido (placeholder): {cert_path}")
+            except Exception as cert_error:
+                print(f"[DEBUG] Erro ao verificar certificado: {cert_error}")
+        else:
+            print(f"[DEBUG] Certificado não encontrado: {cert_path}")
+            
+        # Configurar Keycloak HTTPS
+        keycloak_params = {
+            'server_url': keycloak_server_url,
+            'client_id': Config.KEYCLOAK_CLIENT_ID,
+            'realm_name': Config.KEYCLOAK_REALM,
+            'client_secret_key': Config.KEYCLOAK_CLIENT_SECRET,
+            'timeout': 30
+        }
+        
+        if use_cert:
+            # Com certificado válido
+            keycloak_params['verify'] = True
+            keycloak_params['cert'] = cert_path
+            print(f"[DEBUG] Configurando Keycloak HTTPS com certificado")
+        else:
+            # Sem certificado (modo inseguro)
+            keycloak_params['verify'] = False
+            print(f"[DEBUG] Configurando Keycloak HTTPS sem certificado (modo inseguro)")
+            
+        keycloak_openid = KeycloakOpenID(**keycloak_params)
+        
+        # FORÇAR uso da nossa sessão requests customizada no keycloak
+        keycloak_openid.connection._s = requests_session
+        
+        # Configurar timeout na conexão também
+        keycloak_openid.connection._s.timeout = 30
+        
+        # Criar instância HTTP se disponível
+        if keycloak_http_url:
+            try:
+                keycloak_http = KeycloakOpenID(
+                    server_url=keycloak_http_url,
+                    client_id=Config.KEYCLOAK_CLIENT_ID,
+                    realm_name=Config.KEYCLOAK_REALM,
+                    client_secret_key=Config.KEYCLOAK_CLIENT_SECRET,
+                    verify=False,  # HTTP não precisa de verificação SSL
+                    timeout=30
+                )
+                keycloak_http.connection._s = requests_session
+                keycloak_http.connection._s.timeout = 30
+                print(f"[DEBUG] Keycloak HTTP configurado como fallback")
+            except Exception as http_error:
+                print(f"[DEBUG] Erro ao configurar Keycloak HTTP: {http_error}")
+                keycloak_http = None
+        
+        print(f"[DEBUG] Keycloak HTTPS configurado: {keycloak_server_url}")
+        
+    except Exception as keycloak_init_error:
+        print(f"[ERROR] Erro ao inicializar Keycloak: {keycloak_init_error}")
+        print(f"[ERROR] Tentando configuração de fallback sem SSL...")
+        
+        # FALLBACK: Configuração sem SSL em caso de erro
         try:
-            keycloak_http = KeycloakOpenID(
-                server_url=keycloak_http_url,
+            keycloak_openid = KeycloakOpenID(
+                server_url=Config.KEYCLOAK_SERVER_URL,
                 client_id=Config.KEYCLOAK_CLIENT_ID,
                 realm_name=Config.KEYCLOAK_REALM,
                 client_secret_key=Config.KEYCLOAK_CLIENT_SECRET,
-                verify=False,
+                verify=False,  # Desabilitar completamente SSL
                 timeout=30
             )
-            keycloak_http.connection._s = requests_session
-            keycloak_http.connection._s.timeout = 30
-            print(f"[DEBUG] Keycloak HTTP configurado como fallback")
-        except Exception as http_error:
-            print(f"[DEBUG] Erro ao configurar Keycloak HTTP: {http_error}")
+            keycloak_openid.connection._s = requests_session
+            keycloak_openid.connection._s.timeout = 30
+            print(f"[DEBUG] ✅ Keycloak configurado em modo fallback (sem SSL)")
+        except Exception as fallback_error:
+            print(f"[ERROR] Falha total na configuração do Keycloak: {fallback_error}")
+            keycloak_openid = None
             keycloak_http = None
-    
-    print(f"[DEBUG] Keycloak HTTPS configurado: {keycloak_server_url}")
-    
-except Exception as keycloak_init_error:
-    print(f"[ERROR] Erro ao inicializar Keycloak: {keycloak_init_error}")
-    keycloak_openid = None
-    keycloak_http = None
 
 def token_required(f):
     """Decorator para rotas que requerem autenticação via token"""
     @wraps(f)
     def decorated(*args, **kwargs):
+        initialize_keycloak()  # Inicializar Keycloak dentro do contexto da aplicação
+        
         token = None
         if 'Authorization' in request.headers:
             auth_header = request.headers['Authorization']
@@ -226,17 +283,45 @@ def exchange_code_for_token(code, state):
 
 @auth_bp.route('/login')
 def login():
-    """Redireciona para o Keycloak para autenticação"""
-    # Para desenvolvimento local, usa formulário de login direto
-    # Em produção, mudaria para redirect para Keycloak
-    return redirect(url_for('lms.login_page'))
+    """Redireciona para o Keycloak para autenticação OAuth"""
+    initialize_keycloak()  # Inicializar Keycloak dentro do contexto da aplicação
+    
+    try:
+        # PRIMEIRA TENTATIVA: OAuth flow do Keycloak
+        print(f"[DEBUG] Iniciando fluxo OAuth do Keycloak")
+        
+        # Verificar se Keycloak está disponível
+        if keycloak_openid is None:
+            print(f"[DEBUG] Keycloak não disponível, redirecionando para login direto")
+            flash('Sistema de autenticação temporariamente indisponível. Use o formulário abaixo.', 'warning')
+            return redirect(url_for('lms.login_page'))
+        
+        # Gerar URL de autorização OAuth
+        auth_url = get_authorization_url()
+        print(f"[DEBUG] Redirecionando para Keycloak OAuth: {auth_url}")
+        
+        return redirect(auth_url)
+        
+    except Exception as e:
+        print(f"[DEBUG] Erro no fluxo OAuth: {e}")
+        print(f"[DEBUG] Fallback para formulário de login direto")
+        flash('Erro no sistema de autenticação. Use o formulário abaixo.', 'warning')
+        return redirect(url_for('lms.login_page'))
 
 @auth_bp.route('/direct-login', methods=['POST'])
 def direct_login():
-    """Login direto - método otimizado por ambiente"""
+    """
+    Login direto - FALLBACK quando OAuth falha
+    Esta rota só deve ser usada quando:
+    1. O fluxo OAuth do Keycloak falhar
+    2. Problemas de conectividade com o servidor Keycloak
+    3. Usuários que preferem login manual via formulário
+    """
     print(f"[DEBUG] direct_login chamado - METHOD: {request.method}")
     print(f"[DEBUG] Headers: {dict(request.headers)}")
     print(f"[DEBUG] Form data: {request.form}")
+    
+    initialize_keycloak()  # Inicializar Keycloak dentro do contexto da aplicação
     
     try:
         username = request.form.get('username') or request.json.get('username')
@@ -255,6 +340,12 @@ def direct_login():
         # MÉTODO HÍBRIDO: Tentar python-keycloak primeiro, curl como fallback (em ambos os ambientes)
         is_production = current_app.config.get('FLASK_ENV') == 'production'
         print(f"[DEBUG] Ambiente: {'PRODUÇÃO' if is_production else 'LOCAL'}")
+        
+        # Log adicional sobre instâncias HTTP disponíveis
+        if is_production and keycloak_http_url:
+            print(f"[DEBUG] URLs Keycloak disponíveis:")
+            print(f"[DEBUG] - HTTPS: {Config.KEYCLOAK_SERVER_URL}")
+            print(f"[DEBUG] - HTTP:  {keycloak_http_url}")
         
         token_data = None
         userinfo = None
@@ -464,23 +555,35 @@ def _authenticate_with_curl(username, password):
 
 @auth_bp.route('/callback')
 def callback():
-    """Callback do Keycloak após autenticação"""
+    """Callback do Keycloak após autenticação OAuth"""
+    initialize_keycloak()  # Inicializar Keycloak dentro do contexto da aplicação
+    
+    print(f"[DEBUG] Callback OAuth recebido")
+    
     code = request.args.get('code')
     state = request.args.get('state')
     error = request.args.get('error')
     
+    print(f"[DEBUG] - Code: {'presente' if code else 'ausente'}")
+    print(f"[DEBUG] - State: {'presente' if state else 'ausente'}")
+    print(f"[DEBUG] - Error: {error if error else 'nenhum'}")
+    
     if error:
-        flash(f'Erro na autenticação: {error}', 'error')
+        print(f"[DEBUG] Erro OAuth: {error}")
+        flash(f'Erro na autenticação OAuth: {error}. Tente o formulário de login.', 'warning')
         return redirect(url_for('lms.login_page'))
     
     if not code:
-        flash('Código de autorização não fornecido', 'error')
+        print(f"[DEBUG] Código de autorização não fornecido")
+        flash('Código de autorização não fornecido. Tente o formulário de login.', 'warning')
         return redirect(url_for('lms.login_page'))
     
     try:
+        print(f"[DEBUG] Tentando trocar código por token...")
         # Troca o código pelo token
         token_data = exchange_code_for_token(code, state)
         
+        print(f"[DEBUG] Token obtido, buscando informações do usuário...")
         # Obtém informações do usuário
         userinfo = keycloak_openid.userinfo(token_data['access_token'])
         
@@ -490,15 +593,25 @@ def callback():
         session['access_token'] = token_data['access_token']
         session['refresh_token'] = token_data.get('refresh_token')
         
-        # Verifica se é admin (você pode ajustar esta lógica)
-        admin_emails = ['joaoedu@unicamp.br']  # Configure conforme necessário
+        # Verifica se é admin
+        admin_emails = ['joaoedu@unicamp.br']
         session['is_admin'] = userinfo.get('email') in admin_emails
         
-        flash(f'Login realizado com sucesso! Bem-vindo, {session["user_name"]}!', 'success')
+        print(f"[DEBUG] ✅ OAuth SUCESSO para: {session['user_email']}")
+        flash(f'Login OAuth realizado com sucesso! Bem-vindo, {session["user_name"]}!', 'success')
         return redirect(url_for('lms.dashboard'))
         
     except Exception as e:
-        flash(f'Erro ao processar login: {str(e)}', 'error')
+        error_msg = str(e)
+        print(f"[DEBUG] Erro no callback OAuth: {error_msg}")
+        print(f"[DEBUG] Redirecionando para formulário de login como fallback")
+        
+        # Se for erro de SSL ou conexão, sugerir formulário direto
+        if any(keyword in error_msg.lower() for keyword in ['ssl', 'connection', 'timeout', 'recursion']):
+            flash('Problema de conexão com servidor de autenticação. Use o formulário abaixo.', 'warning')
+        else:
+            flash(f'Erro no processamento OAuth: {error_msg}. Tente o formulário de login.', 'error')
+            
         return redirect(url_for('lms.login_page'))
 
 @auth_bp.route('/logout')
