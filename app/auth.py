@@ -446,7 +446,8 @@ def direct_login():
             keycloak_error = None
             
             for protocol, keycloak_instance in keycloak_instances:
-                print(f"[DEBUG] - Tentando {protocol} com instância: {keycloak_instance.connection.server_url}")
+                # Debug seguro sem acessar connection.server_url
+                print(f"[DEBUG] - Tentando {protocol} authentication")
                 
                 for test_username in usernames_to_try:
                     try:
