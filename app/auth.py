@@ -245,41 +245,98 @@ def get_authorization_url():
     
     return auth_url
 
-def exchange_code_for_token(code, state):
-    """Troca o código de autorização por um token"""
-    # Verifica o state para segurança
-    if state != session.get('oauth_state'):
-        raise Exception("State inválido - possível ataque CSRF")
-    
-    # URL de redirecionamento (deve ser a mesma usada na autorização)
-    redirect_uri = url_for('auth.callback', _external=True)
-    
+# FUNÇÃO REMOVIDA: exchange_code_for_token
+# A função original foi removida devido a problemas de recursão SSL
+# Agora usamos _exchange_code_with_curl() no callback
+
+def _exchange_code_with_curl(code, state):
+    """Troca código OAuth por token usando curl (evita recursão SSL)"""
     try:
-        # Troca o código pelo token usando a biblioteca python-keycloak
-        token = keycloak_openid.token(
-            grant_type='authorization_code',
-            code=code,
-            redirect_uri=redirect_uri
-        )
-        return token
-    except Exception as e:
-        # Se falhar com a biblioteca, tenta fazer request direto
+        # Verificar state
+        if state != session.get('oauth_state'):
+            raise Exception("State inválido - possível ataque CSRF")
+        
+        # URL de token
         token_url = f"{Config.KEYCLOAK_SERVER_URL}/realms/{Config.KEYCLOAK_REALM}/protocol/openid-connect/token"
         
+        # Parâmetros para troca de código
         data = {
             'grant_type': 'authorization_code',
             'client_id': Config.KEYCLOAK_CLIENT_ID,
             'client_secret': Config.KEYCLOAK_CLIENT_SECRET,
             'code': code,
-            'redirect_uri': redirect_uri
+            'redirect_uri': url_for('auth.callback', _external=True)
         }
         
-        response = requests.post(token_url, data=data)
+        # Construir comando curl
+        curl_data = '&'.join([f'{k}={v}' for k, v in data.items()])
         
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"Erro ao trocar código por token: {response.text}")
+        import subprocess
+        import json
+        
+        curl_command = [
+            'curl', '-k', '--silent', '--max-time', '15',
+            '-X', 'POST',
+            '-H', 'Content-Type: application/x-www-form-urlencoded',
+            '-d', curl_data,
+            token_url
+        ]
+        
+        print(f"[DEBUG] Executando curl para OAuth token...")
+        result = subprocess.run(curl_command, capture_output=True, text=True, timeout=20)
+        
+        if result.returncode != 0:
+            raise Exception(f"Curl falhou: {result.stderr}")
+        
+        response_text = result.stdout.strip()
+        if not response_text:
+            raise Exception("Resposta vazia do curl")
+        
+        token_data = json.loads(response_text)
+        
+        if 'error' in token_data:
+            raise Exception(f"Erro Keycloak: {token_data.get('error_description', token_data['error'])}")
+        
+        return token_data
+        
+    except Exception as e:
+        print(f"[ERROR] Erro na troca de código: {e}")
+        return None
+
+def _get_userinfo_with_curl(access_token):
+    """Obter userinfo usando curl (evita recursão SSL)"""
+    try:
+        userinfo_url = f"{Config.KEYCLOAK_SERVER_URL}/realms/{Config.KEYCLOAK_REALM}/protocol/openid-connect/userinfo"
+        
+        import subprocess
+        import json
+        
+        curl_command = [
+            'curl', '-k', '--silent', '--max-time', '15',
+            '-H', f'Authorization: Bearer {access_token}',
+            userinfo_url
+        ]
+        
+        print(f"[DEBUG] Executando curl para userinfo...")
+        result = subprocess.run(curl_command, capture_output=True, text=True, timeout=20)
+        
+        if result.returncode != 0:
+            raise Exception(f"Curl falhou: {result.stderr}")
+        
+        response_text = result.stdout.strip()
+        if not response_text:
+            raise Exception("Resposta vazia do curl")
+        
+        userinfo = json.loads(response_text)
+        
+        if 'error' in userinfo:
+            raise Exception(f"Erro userinfo: {userinfo.get('error_description', userinfo['error'])}")
+        
+        return userinfo
+        
+    except Exception as e:
+        print(f"[ERROR] Erro ao obter userinfo: {e}")
+        return None
 
 @auth_bp.route('/login')
 def login():
@@ -579,17 +636,34 @@ def callback():
         return redirect(url_for('lms.login_page'))
     
     try:
-        print(f"[DEBUG] Tentando trocar código por token...")
-        # Troca o código pelo token
-        token_data = exchange_code_for_token(code, state)
+        print(f"[DEBUG] Tentando trocar código por token com curl...")
         
-        print(f"[DEBUG] Token obtido, buscando informações do usuário...")
-        # Obtém informações do usuário
-        userinfo = keycloak_openid.userinfo(token_data['access_token'])
+        # USAR CURL DIRETAMENTE para evitar recursão SSL
+        token_data = _exchange_code_with_curl(code, state)
+        
+        if not token_data or 'access_token' not in token_data:
+            raise Exception("Token não recebido")
+        
+        print(f"[DEBUG] Token obtido com sucesso via curl")
+        
+        # Obter informações do usuário com curl também
+        userinfo = _get_userinfo_with_curl(token_data['access_token'])
+        
+        if not userinfo:
+            raise Exception("Userinfo não obtido")
+        
+        print(f"[DEBUG] UserInfo obtido: {userinfo}")
+        
+        # Processar nome do usuário (corrigir duplicação se houver)
+        user_name = userinfo.get('name', userinfo.get('preferred_username', 'Usuário'))
+        if user_name:
+            name_parts = user_name.split()
+            if len(name_parts) >= 2 and name_parts[0] == name_parts[1]:
+                user_name = name_parts[0]
         
         # Armazena informações do usuário na sessão
         session['user_email'] = userinfo.get('email')
-        session['user_name'] = userinfo.get('given_name')
+        session['user_name'] = user_name
         session['access_token'] = token_data['access_token']
         session['refresh_token'] = token_data.get('refresh_token')
         
