@@ -667,7 +667,7 @@ def callback():
         print(f"[DEBUG] UserInfo obtido: {userinfo}")
         
         # Processar nome do usuário (corrigir duplicação se houver)
-        user_name = userinfo.get('name', userinfo.get('preferred_username', 'Usuário'))
+        user_name = userinfo.get('given_name', 'Usuário')
         if user_name:
             name_parts = user_name.split()
             if len(name_parts) >= 2 and name_parts[0] == name_parts[1]:
