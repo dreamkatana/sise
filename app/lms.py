@@ -315,3 +315,230 @@ def admin_courses_config():
         return jsonify({'message': 'Configuração atualizada com sucesso!'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+def get_relatorio_gestao_cursos():
+    """
+    Gera relatório de gestão com disciplinas/carga horária oferecida VS alunos 
+    com carga horária concluída e à concluir para análise de metas.
+    Mostra apenas os cursos configurados no painel de administração.
+    """
+    try:
+        # Carregar configuração de cursos do painel admin
+        course_config = load_course_config()
+        codcua_order = course_config.get('codcua_order', [])
+        
+        # Se não há cursos configurados, retornar dados vazios
+        if not codcua_order:
+            print("[DEBUG] Nenhum curso configurado no painel admin - retornando dados vazios")
+            return {
+                'dados_detalhados': [],
+                'resumo_cursos': [],
+                'estatisticas_gerais': {
+                    'total_cursos': 0,
+                    'total_alunos': 0,
+                    'alunos_concluidos': 0,
+                    'alunos_em_andamento': 0,
+                    'taxa_conclusao_geral': 0
+                }
+            }
+        
+        print(f"[DEBUG] Cursos configurados no admin: {codcua_order}")
+        
+        # Query principal: JOIN entre tabelas filtrando pelos cursos configurados
+        query = db.session.query(
+            # Dados do curso
+            CursoAperf.CODCUA.label('codigo_curso'),
+            CursoAperf.NOMCUA.label('nome_curso'),
+            CursoAperf.CHRCUA.label('carga_horaria_total'),
+            
+            # Dados do aluno
+            FichaCol.NUMCAD.label('matricula_aluno'),
+            FichaCol.NOMFUN.label('nome_aluno'),
+            FichaCol.EMACOM.label('email_aluno'),
+            
+            # Dados da matrícula/turma
+            CursoAperfCol.TMACUA.label('codigo_turma'),
+            CursoAperfCol.CARHOR.label('carga_horaria_matricula'),
+            CursoAperfCol.PERINI.label('data_inicio'),
+            CursoAperfCol.PERFIM.label('data_fim'),
+            CursoAperfCol.DESSITCUA.label('situacao_curso'),
+            CursoAperfCol.SITCUA.label('codigo_situacao'),
+            
+            # Dados de frequência/faltas
+            FrequenciaTurma.QTDFAL.label('quantidade_faltas'),
+            FrequenciaTurma.HORFAL.label('horas_falta'),
+            FrequenciaTurma.SITCUA.label('situacao_frequencia')
+            
+        ).select_from(CursoAperf).join(
+            CursoAperfCol,
+            CursoAperf.CODCUA == CursoAperfCol.CODCUA
+        ).join(
+            FichaCol,
+            and_(
+                CursoAperfCol.TIPCOL == FichaCol.TIPCOL,
+                CursoAperfCol.NUMCAD == FichaCol.NUMCAD
+            )
+        ).outerjoin(
+            FrequenciaTurma,
+            and_(
+                CursoAperfCol.TIPCOL == FrequenciaTurma.TIPCOL,
+                CursoAperfCol.NUMCAD == FrequenciaTurma.NUMCAD,
+                CursoAperfCol.CODCUA == FrequenciaTurma.CODCUA,
+                CursoAperfCol.TMACUA == FrequenciaTurma.TMACUA
+            )
+        ).filter(
+            # FILTRO PRINCIPAL: Apenas cursos configurados no painel admin
+            CursoAperf.CODCUA.in_(codcua_order)
+        ).order_by(
+            # Ordenar pela ordem definida no painel admin
+            case(
+                *[(CursoAperf.CODCUA == codigo, i) for i, codigo in enumerate(codcua_order)],
+                else_=len(codcua_order)
+            ),
+            FichaCol.NOMFUN
+        )
+        
+        results = query.all()
+        
+        print(f"[DEBUG] Encontrados {len(results)} registros para cursos configurados")
+        
+        # Processar dados para o relatório
+        relatorio_dados = []
+        cursos_summary = {}
+        
+        for row in results:
+            # Calcular horas concluídas e a concluir
+            carga_total = float(row.carga_horaria_matricula or row.carga_horaria_total or 0)
+            horas_falta = float(row.horas_falta or 0)
+            horas_concluidas = max(0, carga_total - horas_falta)
+            horas_a_concluir = max(0, horas_falta)
+            
+            # Calcular porcentagem de conclusão
+            percent_concluido = (horas_concluidas / carga_total * 100) if carga_total > 0 else 0
+            
+            # Status do aluno baseado na situação
+            status_aluno = "Concluído" if row.codigo_situacao == 1 else \
+                          "Em Andamento" if row.codigo_situacao == 2 else \
+                          "Pendente" if row.codigo_situacao == 3 else \
+                          "Cancelado" if row.codigo_situacao == 4 else \
+                          row.situacao_curso or "Indefinido"
+            
+            # Dados do aluno individual
+            aluno_data = {
+                'codigo_curso': row.codigo_curso,
+                'nome_curso': row.nome_curso,
+                'codigo_turma': row.codigo_turma,
+                'matricula_aluno': row.matricula_aluno,
+                'nome_aluno': row.nome_aluno,
+                'email_aluno': row.email_aluno,
+                'carga_horaria_total': carga_total,
+                'horas_concluidas': horas_concluidas,
+                'horas_a_concluir': horas_a_concluir,
+                'percent_concluido': round(percent_concluido, 1),
+                'status_aluno': status_aluno,
+                'data_inicio': row.data_inicio,
+                'data_fim': row.data_fim,
+                'quantidade_faltas': row.quantidade_faltas or 0
+            }
+            
+            relatorio_dados.append(aluno_data)
+            
+            # Acumular dados por curso para summary
+            curso_key = f"{row.codigo_curso}_{row.nome_curso}"
+            if curso_key not in cursos_summary:
+                cursos_summary[curso_key] = {
+                    'codigo_curso': row.codigo_curso,
+                    'nome_curso': row.nome_curso,
+                    'carga_horaria_oferecida': carga_total,
+                    'total_alunos': 0,
+                    'alunos_concluidos': 0,
+                    'alunos_em_andamento': 0,
+                    'alunos_pendentes': 0,
+                    'total_horas_concluidas': 0,
+                    'total_horas_a_concluir': 0,
+                    'media_conclusao': 0
+                }
+            
+            # Atualizar contadores do curso
+            curso_summary = cursos_summary[curso_key]
+            curso_summary['total_alunos'] += 1
+            curso_summary['total_horas_concluidas'] += horas_concluidas
+            curso_summary['total_horas_a_concluir'] += horas_a_concluir
+            
+            if status_aluno == "Concluído":
+                curso_summary['alunos_concluidos'] += 1
+            elif status_aluno == "Em Andamento":
+                curso_summary['alunos_em_andamento'] += 1
+            else:
+                curso_summary['alunos_pendentes'] += 1
+        
+        # Calcular médias de conclusão por curso
+        for curso_summary in cursos_summary.values():
+            if curso_summary['total_alunos'] > 0:
+                total_horas_possiveis = curso_summary['carga_horaria_oferecida'] * curso_summary['total_alunos']
+                if total_horas_possiveis > 0:
+                    curso_summary['media_conclusao'] = round(
+                        (curso_summary['total_horas_concluidas'] / total_horas_possiveis) * 100, 1
+                    )
+        
+        # Ordenar resumo de cursos pela ordem configurada no admin
+        resumo_cursos_ordenado = []
+        for codigo in codcua_order:
+            for curso_key, curso_data in cursos_summary.items():
+                if curso_data['codigo_curso'] == codigo:
+                    resumo_cursos_ordenado.append(curso_data)
+                    break
+        
+        # Estatísticas gerais
+        total_alunos = len(relatorio_dados)
+        total_cursos = len(cursos_summary)
+        alunos_concluidos = len([a for a in relatorio_dados if a['status_aluno'] == "Concluído"])
+        alunos_em_andamento = len([a for a in relatorio_dados if a['status_aluno'] == "Em Andamento"])
+        
+        estatisticas_gerais = {
+            'total_cursos': total_cursos,
+            'total_alunos': total_alunos,
+            'alunos_concluidos': alunos_concluidos,
+            'alunos_em_andamento': alunos_em_andamento,
+            'taxa_conclusao_geral': round((alunos_concluidos / total_alunos * 100), 1) if total_alunos > 0 else 0
+        }
+        
+        print(f"[DEBUG] Relatório processado: {total_cursos} cursos, {total_alunos} alunos")
+        
+        return {
+            'dados_detalhados': relatorio_dados,
+            'resumo_cursos': resumo_cursos_ordenado,
+            'estatisticas_gerais': estatisticas_gerais
+        }
+        
+    except Exception as e:
+        print(f"[ERROR] Erro ao gerar relatório de gestão: {e}")
+        import traceback
+        print(f"[ERROR] Traceback: {traceback.format_exc()}")
+        return {
+            'dados_detalhados': [],
+            'resumo_cursos': [],
+            'estatisticas_gerais': {
+                'total_cursos': 0,
+                'total_alunos': 0,
+                'alunos_concluidos': 0,
+                'alunos_em_andamento': 0,
+                'taxa_conclusao_geral': 0
+            }
+        }
+
+@lms_bp.route('/admin/relatorio-gestao')
+@login_required
+def relatorio_gestao():
+    """Relatório de gestão de cursos/alunos - disciplinas vs progresso"""
+    if not session.get('is_admin'):
+        flash('Acesso negado! Área restrita para administradores.', 'error')
+        return redirect(url_for('lms.dashboard'))
+    
+    # Obter dados do relatório
+    relatorio = get_relatorio_gestao_cursos()
+    
+    return render_template('relatorio_gestao.html',
+                         dados_detalhados=relatorio['dados_detalhados'],
+                         resumo_cursos=relatorio['resumo_cursos'],
+                         estatisticas_gerais=relatorio['estatisticas_gerais'])

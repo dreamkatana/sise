@@ -155,24 +155,38 @@
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-4 mb-3">
                         <div class="card bg-light">
                             <div class="card-body text-center">
-                                <i class="bi bi-file-earmark-bar-graph text-primary mb-2" style="font-size: 2rem;"></i>
-                                <h6>Relatório de Conclusões</h6>
-                                <p class="card-text small text-muted">Cursos concluídos por período</p>
-                                <button class="btn btn-outline-primary btn-sm">Gerar Relatório</button>
+                                <i class="bi bi-clipboard-data text-primary mb-2" style="font-size: 2rem;"></i>
+                                <h6>Relatório de Gestão</h6>
+                                <p class="card-text small text-muted">Disciplinas vs progresso dos alunos</p>
+                                <a href="{{ url_for('lms.relatorio_gestao') }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-graph-up me-1"></i>
+                                    Acessar Relatório
+                                </a>
                             </div>
                         </div>
                     </div>
                     
-                    <div class="col-md-6 mb-3">
+                    <div class="col-md-4 mb-3">
                         <div class="card bg-light">
                             <div class="card-body text-center">
-                                <i class="bi bi-person-check text-success mb-2" style="font-size: 2rem;"></i>
+                                <i class="bi bi-file-earmark-bar-graph text-success mb-2" style="font-size: 2rem;"></i>
+                                <h6>Relatório de Conclusões</h6>
+                                <p class="card-text small text-muted">Cursos concluídos por período</p>
+                                <button class="btn btn-outline-success btn-sm">Gerar Relatório</button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <i class="bi bi-person-check text-warning mb-2" style="font-size: 2rem;"></i>
                                 <h6>Relatório de Frequência</h6>
                                 <p class="card-text small text-muted">Análise de presença por curso</p>
-                                <button class="btn btn-outline-success btn-sm">Gerar Relatório</button>
+                                <button class="btn btn-outline-warning btn-sm">Gerar Relatório</button>
                             </div>
                         </div>
                     </div>

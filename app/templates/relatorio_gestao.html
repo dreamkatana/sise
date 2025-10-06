@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block title %}Relatório de Gestão - PDG{% endblock %}
+{% block page_title %}Relatório de Gestão de Cursos{% endblock %}
+
+{% block extra_css %}
+<style>
+.metric-card {
+    border-left: 4px solid #007bff;
+    transition: transform 0.2s;
+}
+.metric-card:hover {
+    transform: translateY(-2px);
+}
+.progress-bar-custom {
+    height: 8px;
+    border-radius: 4px;
+}
+.status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+}
+.table-hover tbody tr:hover {
+    background-color: rgba(0,123,255,0.1);
+}
+.filter-card {
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border: none;
+}
+.export-btn {
+    background: linear-gradient(45deg, #28a745, #20c997);
+    border: none;
+    color: white;
+}
+.chart-container {
+    height: 300px;
+    position: relative;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="h4 mb-2">Relatório de Gestão de Cursos</h2>
+                <p class="text-muted">Disciplinas oferecidas vs progresso dos alunos - Análise de metas de conclusão</p>
+                <p class="text-info small"><i class="bi bi-info-circle me-1"></i>Exibindo apenas cursos configurados no Painel de Administração</p>
+            </div>
+            <div>
+                {% if dados_detalhados %}
+                <button class="btn export-btn btn-sm me-2" onclick="exportarRelatorio()">
+                    <i class="bi bi-download me-1"></i>
+                    Exportar Excel
+                </button>
+                <button class="btn btn-outline-primary btn-sm" onclick="window.print()">
+                    <i class="bi bi-printer me-1"></i>
+                    Imprimir
+                </button>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not dados_detalhados %}
+<!-- Aviso quando não há dados -->
+<div class="row">
+    <div class="col-12">
+        <div class="card border-warning">
+            <div class="card-body text-center py-5">
+                <i class="bi bi-exclamation-triangle text-warning mb-3" style="font-size: 3rem;"></i>
+                <h4 class="text-warning">Nenhum curso configurado</h4>
+                <p class="text-muted mb-4">
+                    Para exibir dados neste relatório, é necessário configurar a lista de cursos no Painel de Administração.
+                </p>
+                <a href="{{ url_for('lms.admin_dashboard') }}" class="btn btn-warning">
+                    <i class="bi bi-gear me-1"></i>
+                    Configurar Cursos
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+
+<!-- Estatísticas Gerais -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-3">
+        <div class="card metric-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-primary text-uppercase mb-1">Total de Cursos</h6>
+                        <h3 class="mb-0">{{ estatisticas_gerais.total_cursos }}</h3>
+                    </div>
+                    <div class="text-primary">
+                        <i class="bi bi-book" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-3">
+        <div class="card metric-card" style="border-left-color: #28a745;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-success text-uppercase mb-1">Total de Alunos</h6>
+                        <h3 class="mb-0">{{ estatisticas_gerais.total_alunos }}</h3>
+                    </div>
+                    <div class="text-success">
+                        <i class="bi bi-people" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-3">
+        <div class="card metric-card" style="border-left-color: #ffc107;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-warning text-uppercase mb-1">Em Andamento</h6>
+                        <h3 class="mb-0">{{ estatisticas_gerais.alunos_em_andamento }}</h3>
+                    </div>
+                    <div class="text-warning">
+                        <i class="bi bi-clock" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-xl-3 col-md-6 mb-3">
+        <div class="card metric-card" style="border-left-color: #17a2b8;">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h6 class="text-info text-uppercase mb-1">Taxa de Conclusão</h6>
+                        <h3 class="mb-0">{{ estatisticas_gerais.taxa_conclusao_geral }}%</h3>
+                    </div>
+                    <div class="text-info">
+                        <i class="bi bi-graph-up" style="font-size: 2rem;"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filtros -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card filter-card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label class="form-label">Filtrar por Curso</label>
+                        <select class="form-select" id="filtro-curso" onchange="filtrarTabela()">
+                            <option value="">Todos os cursos</option>
+                            {% for curso in resumo_cursos %}
+                            <option value="{{ curso.codigo_curso }}">{{ curso.nome_curso }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Filtrar por Status</label>
+                        <select class="form-select" id="filtro-status" onchange="filtrarTabela()">
+                            <option value="">Todos os status</option>
+                            <option value="Concluído">Concluído</option>
+                            <option value="Em Andamento">Em Andamento</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Cancelado">Cancelado</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Conclusão Mínima (%)</label>
+                        <input type="range" class="form-range" id="filtro-conclusao" min="0" max="100" value="0" onchange="filtrarTabela(); document.getElementById('conclusao-valor').textContent = this.value + '%'">
+                        <small class="text-muted">Mínimo: <span id="conclusao-valor">0%</span></small>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <button class="btn btn-outline-secondary" onclick="limparFiltros()">
+                            <i class="bi bi-arrow-clockwise me-1"></i>
+                            Limpar Filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Resumo por Curso -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-bar-chart me-2"></i>
+                    Resumo por Curso
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Curso</th>
+                                <th>Carga Horária</th>
+                                <th>Total Alunos</th>
+                                <th>Concluídos</th>
+                                <th>Em Andamento</th>
+                                <th>Pendentes</th>
+                                <th>Taxa de Conclusão</th>
+                                <th>Progresso</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for curso in resumo_cursos %}
+                            <tr>
+                                <td>
+                                    <strong>{{ curso.nome_curso }}</strong>
+                                    <br><small class="text-muted">Código: {{ curso.codigo_curso }}</small>
+                                </td>
+                                <td>{{ curso.carga_horaria_oferecida }}h</td>
+                                <td>
+                                    <span class="badge bg-primary">{{ curso.total_alunos }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-success">{{ curso.alunos_concluidos }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-warning">{{ curso.alunos_em_andamento }}</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">{{ curso.alunos_pendentes }}</span>
+                                </td>
+                                <td>{{ curso.media_conclusao }}%</td>
+                                <td>
+                                    <div class="progress progress-bar-custom">
+                                        <div class="progress-bar {% if curso.media_conclusao >= 80 %}bg-success{% elif curso.media_conclusao >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                             style="width: {{ curso.media_conclusao }}%"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detalhamento por Aluno -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-people me-2"></i>
+                    Detalhamento por Aluno
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="tabela-detalhada">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Aluno</th>
+                                <th>Curso</th>
+                                <th>Turma</th>
+                                <th>Carga Horária</th>
+                                <th>Horas Concluídas</th>
+                                <th>Horas à Concluir</th>
+                                <th>% Concluído</th>
+                                <th>Status</th>
+                                <th>Faltas</th>
+                                <th>Período</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for aluno in dados_detalhados %}
+                            <tr data-curso="{{ aluno.codigo_curso }}" data-status="{{ aluno.status_aluno }}" data-conclusao="{{ aluno.percent_concluido }}">
+                                <td>
+                                    <strong>{{ aluno.nome_aluno }}</strong>
+                                    <br><small class="text-muted">{{ aluno.email_aluno }}</small>
+                                    <br><small class="text-muted">Mat: {{ aluno.matricula_aluno }}</small>
+                                </td>
+                                <td>
+                                    <span class="fw-bold">{{ aluno.nome_curso }}</span>
+                                    <br><small class="text-muted">Código: {{ aluno.codigo_curso }}</small>
+                                </td>
+                                <td>{{ aluno.codigo_turma }}</td>
+                                <td>{{ aluno.carga_horaria_total }}h</td>
+                                <td class="text-success">{{ aluno.horas_concluidas }}h</td>
+                                <td class="text-warning">{{ aluno.horas_a_concluir }}h</td>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">{{ aluno.percent_concluido }}%</span>
+                                        <div class="progress flex-grow-1 progress-bar-custom">
+                                            <div class="progress-bar {% if aluno.percent_concluido >= 80 %}bg-success{% elif aluno.percent_concluido >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                 style="width: {{ aluno.percent_concluido }}%"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="badge status-badge {% if aluno.status_aluno == 'Concluído' %}bg-success{% elif aluno.status_aluno == 'Em Andamento' %}bg-warning text-dark{% elif aluno.status_aluno == 'Pendente' %}bg-secondary{% else %}bg-danger{% endif %}">
+                                        {{ aluno.status_aluno }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if aluno.quantidade_faltas > 0 %}
+                                        <span class="text-danger">{{ aluno.quantidade_faltas }}</span>
+                                    {% else %}
+                                        <span class="text-success">0</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if aluno.data_inicio and aluno.data_fim %}
+                                        <small>
+                                            {{ aluno.data_inicio.strftime('%d/%m/%Y') if aluno.data_inicio else '-' }}
+                                            <br>
+                                            {{ aluno.data_fim.strftime('%d/%m/%Y') if aluno.data_fim else '-' }}
+                                        </small>
+                                    {% else %}
+                                        <small class="text-muted">-</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function filtrarTabela() {
+    const filtroCurso = document.getElementById('filtro-curso').value;
+    const filtroStatus = document.getElementById('filtro-status').value;
+    const filtroConclusao = document.getElementById('filtro-conclusao').value;
+    
+    const linhas = document.querySelectorAll('#tabela-detalhada tbody tr');
+    
+    linhas.forEach(linha => {
+        const curso = linha.getAttribute('data-curso');
+        const status = linha.getAttribute('data-status');
+        const conclusao = parseFloat(linha.getAttribute('data-conclusao'));
+        
+        let mostrar = true;
+        
+        // Filtro por curso
+        if (filtroCurso && curso !== filtroCurso) {
+            mostrar = false;
+        }
+        
+        // Filtro por status
+        if (filtroStatus && status !== filtroStatus) {
+            mostrar = false;
+        }
+        
+        // Filtro por conclusão mínima
+        if (conclusao < parseFloat(filtroConclusao)) {
+            mostrar = false;
+        }
+        
+        linha.style.display = mostrar ? '' : 'none';
+    });
+}
+
+function limparFiltros() {
+    document.getElementById('filtro-curso').value = '';
+    document.getElementById('filtro-status').value = '';
+    document.getElementById('filtro-conclusao').value = '0';
+    document.getElementById('conclusao-valor').textContent = '0%';
+    filtrarTabela();
+}
+
+function exportarRelatorio() {
+    // Criar CSV dos dados
+    let csv = 'Aluno,Email,Curso,Turma,Carga Horária,Horas Concluídas,Horas à Concluir,% Concluído,Status,Faltas\n';
+    
+    const linhasVisiveis = document.querySelectorAll('#tabela-detalhada tbody tr:not([style*="display: none"])');
+    
+    linhasVisiveis.forEach(linha => {
+        const colunas = linha.querySelectorAll('td');
+        const nomeAluno = colunas[0].querySelector('strong').textContent;
+        const emailAluno = colunas[0].querySelector('small').textContent;
+        const curso = colunas[1].querySelector('.fw-bold').textContent;
+        const turma = colunas[2].textContent;
+        const cargaHoraria = colunas[3].textContent;
+        const horasConcluidas = colunas[4].textContent;
+        const horasAConcluir = colunas[5].textContent;
+        const percentConcluido = colunas[6].querySelector('span').textContent;
+        const status = colunas[7].querySelector('.badge').textContent.trim();
+        const faltas = colunas[8].textContent.trim();
+        
+        csv += `"${nomeAluno}","${emailAluno}","${curso}","${turma}","${cargaHoraria}","${horasConcluidas}","${horasAConcluir}","${percentConcluido}","${status}","${faltas}"\n`;
+    });
+    
+    // Download do arquivo
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `relatorio_gestao_cursos_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+}
+
+// Atualizar valor do range de conclusão
+document.getElementById('filtro-conclusao').addEventListener('input', function() {
+    document.getElementById('conclusao-valor').textContent = this.value + '%';
+});
+</script>
+{% endblock %}
