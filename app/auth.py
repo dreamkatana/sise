@@ -139,11 +139,16 @@ def initialize_keycloak():
             
         keycloak_openid = KeycloakOpenID(**keycloak_params)
         
-        # FORÇAR uso da nossa sessão requests customizada no keycloak
-        keycloak_openid.connection._s = requests_session
-        
-        # Configurar timeout na conexão também
-        keycloak_openid.connection._s.timeout = 30
+        # FORÇAR uso da nossa sessão requests customizada no keycloak (com verificação)
+        try:
+            if hasattr(keycloak_openid, 'connection') and hasattr(keycloak_openid.connection, '_s'):
+                keycloak_openid.connection._s = requests_session
+                keycloak_openid.connection._s.timeout = 30
+                print(f"[DEBUG] Sessão requests customizada aplicada")
+            else:
+                print(f"[DEBUG] Estrutura de conexão diferente, pulando configuração de sessão")
+        except Exception as session_error:
+            print(f"[DEBUG] Erro ao configurar sessão customizada: {session_error}")
         
         # Criar instância HTTP se disponível
         if keycloak_http_url:
@@ -156,8 +161,14 @@ def initialize_keycloak():
                     verify=False,  # HTTP não precisa de verificação SSL
                     timeout=30
                 )
-                keycloak_http.connection._s = requests_session
-                keycloak_http.connection._s.timeout = 30
+                # Aplicar sessão customizada com verificação
+                try:
+                    if hasattr(keycloak_http, 'connection') and hasattr(keycloak_http.connection, '_s'):
+                        keycloak_http.connection._s = requests_session
+                        keycloak_http.connection._s.timeout = 30
+                except Exception as http_session_error:
+                    print(f"[DEBUG] Erro ao configurar sessão HTTP: {http_session_error}")
+                    
                 print(f"[DEBUG] Keycloak HTTP configurado como fallback")
             except Exception as http_error:
                 print(f"[DEBUG] Erro ao configurar Keycloak HTTP: {http_error}")
