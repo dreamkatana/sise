@@ -125,6 +125,7 @@ def get_course_stats(courses):
             stats['proximos'] += 1
             
         if course['CARGA HORÁRIA']:
+            # A carga horária já foi ajustada na função get_user_courses()
             stats['total_horas'] += course['CARGA HORÁRIA']
     
     return stats
@@ -329,7 +330,6 @@ def get_relatorio_gestao_cursos():
         
         # Se não há cursos configurados, retornar dados vazios
         if not codcua_order:
-            print("[DEBUG] Nenhum curso configurado no painel admin - retornando dados vazios")
             return {
                 'dados_detalhados': [],
                 'resumo_cursos': [],
@@ -341,8 +341,6 @@ def get_relatorio_gestao_cursos():
                     'taxa_conclusao_geral': 0
                 }
             }
-        
-        print(f"[DEBUG] Cursos configurados no admin: {codcua_order}")
         
         # Query principal: JOIN entre tabelas filtrando pelos cursos configurados
         query = db.session.query(
@@ -400,16 +398,15 @@ def get_relatorio_gestao_cursos():
         
         results = query.all()
         
-        print(f"[DEBUG] Encontrados {len(results)} registros para cursos configurados")
-        
         # Processar dados para o relatório
         relatorio_dados = []
         cursos_summary = {}
         
         for row in results:
             # Calcular horas concluídas e a concluir
-            carga_total = float(row.carga_horaria_matricula or row.carga_horaria_total or 0)
-            horas_falta = float(row.horas_falta or 0)
+            # Usar sempre a carga horária oficial do curso (CHRCUA)
+            carga_total = float(row.carga_horaria_matricula or 0) / 60  # Carga oficial do curso
+            horas_falta = float(row.horas_falta or 0) / 60  # Ajustar para horas reais
             horas_concluidas = max(0, carga_total - horas_falta)
             horas_a_concluir = max(0, horas_falta)
             
@@ -446,10 +443,12 @@ def get_relatorio_gestao_cursos():
             # Acumular dados por curso para summary
             curso_key = f"{row.codigo_curso}_{row.nome_curso}"
             if curso_key not in cursos_summary:
+                # Usar carga horária total do curso (CHRCUA) dividida por 60
+                carga_horaria_curso = float(row.carga_horaria_matricula or 0) / 60
                 cursos_summary[curso_key] = {
                     'codigo_curso': row.codigo_curso,
                     'nome_curso': row.nome_curso,
-                    'carga_horaria_oferecida': carga_total,
+                    'carga_horaria_oferecida': carga_horaria_curso,
                     'total_alunos': 0,
                     'alunos_concluidos': 0,
                     'alunos_em_andamento': 0,
@@ -483,11 +482,21 @@ def get_relatorio_gestao_cursos():
         
         # Ordenar resumo de cursos pela ordem configurada no admin
         resumo_cursos_ordenado = []
-        for codigo in codcua_order:
+        
+        # Converter codcua_order para int para comparação
+        codcua_order_int = [int(codigo) for codigo in codcua_order]
+        
+        # Adicionar cursos na ordem configurada
+        for codigo in codcua_order_int:
             for curso_key, curso_data in cursos_summary.items():
                 if curso_data['codigo_curso'] == codigo:
                     resumo_cursos_ordenado.append(curso_data)
                     break
+        
+        # Adicionar cursos que não estão na ordem configurada (fallback)
+        for curso_key, curso_data in cursos_summary.items():
+            if not any(c['codigo_curso'] == curso_data['codigo_curso'] for c in resumo_cursos_ordenado):
+                resumo_cursos_ordenado.append(curso_data)
         
         # Estatísticas gerais
         total_alunos = len(relatorio_dados)
@@ -502,8 +511,6 @@ def get_relatorio_gestao_cursos():
             'alunos_em_andamento': alunos_em_andamento,
             'taxa_conclusao_geral': round((alunos_concluidos / total_alunos * 100), 1) if total_alunos > 0 else 0
         }
-        
-        print(f"[DEBUG] Relatório processado: {total_cursos} cursos, {total_alunos} alunos")
         
         return {
             'dados_detalhados': relatorio_dados,

@@ -167,7 +167,7 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label">Filtrar por Status</label>
                         <select class="form-select" id="filtro-status" onchange="filtrarTabela()">
                             <option value="">Todos os status</option>
@@ -178,14 +178,22 @@
                         </select>
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label">Pesquisar Aluno</label>
+                        <input type="text" class="form-control" id="filtro-aluno" 
+                               placeholder="Nome, matrícula ou email..."
+                               onkeyup="filtrarTabela()"
+                               autocomplete="off">
+                        <div class="form-text">Digite para buscar por nome, matrícula ou email</div>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">Conclusão Mínima (%)</label>
                         <input type="range" class="form-range" id="filtro-conclusao" min="0" max="100" value="0" onchange="filtrarTabela(); document.getElementById('conclusao-valor').textContent = this.value + '%'">
                         <small class="text-muted">Mínimo: <span id="conclusao-valor">0%</span></small>
                     </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <button class="btn btn-outline-secondary" onclick="limparFiltros()">
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button class="btn btn-outline-secondary w-100" onclick="limparFiltros()">
                             <i class="bi bi-arrow-clockwise me-1"></i>
-                            Limpar Filtros
+                            Limpar
                         </button>
                     </div>
                 </div>
@@ -285,7 +293,12 @@
                         </thead>
                         <tbody>
                             {% for aluno in dados_detalhados %}
-                            <tr data-curso="{{ aluno.codigo_curso }}" data-status="{{ aluno.status_aluno }}" data-conclusao="{{ aluno.percent_concluido }}">
+                            <tr data-curso="{{ aluno.codigo_curso }}" 
+                                data-status="{{ aluno.status_aluno }}" 
+                                data-conclusao="{{ aluno.percent_concluido }}"
+                                data-nome="{{ aluno.nome_aluno|lower }}"
+                                data-email="{{ aluno.email_aluno|lower }}"
+                                data-matricula="{{ aluno.matricula_aluno }}">
                                 <td>
                                     <strong>{{ aluno.nome_aluno }}</strong>
                                     <br><small class="text-muted">{{ aluno.email_aluno }}</small>
@@ -349,13 +362,18 @@ function filtrarTabela() {
     const filtroCurso = document.getElementById('filtro-curso').value;
     const filtroStatus = document.getElementById('filtro-status').value;
     const filtroConclusao = document.getElementById('filtro-conclusao').value;
+    const filtroAluno = document.getElementById('filtro-aluno').value.toLowerCase().trim();
     
     const linhas = document.querySelectorAll('#tabela-detalhada tbody tr');
+    let linhasVisiveis = 0;
     
     linhas.forEach(linha => {
         const curso = linha.getAttribute('data-curso');
         const status = linha.getAttribute('data-status');
         const conclusao = parseFloat(linha.getAttribute('data-conclusao'));
+        const nomeAluno = linha.getAttribute('data-nome');
+        const emailAluno = linha.getAttribute('data-email');
+        const matriculaAluno = linha.getAttribute('data-matricula');
         
         let mostrar = true;
         
@@ -374,28 +392,68 @@ function filtrarTabela() {
             mostrar = false;
         }
         
+        // Filtro por aluno (nome, email ou matrícula)
+        if (filtroAluno) {
+            const contemNome = nomeAluno && nomeAluno.includes(filtroAluno);
+            const contemEmail = emailAluno && emailAluno.includes(filtroAluno);
+            const contemMatricula = matriculaAluno && matriculaAluno.toString().includes(filtroAluno);
+            
+            if (!contemNome && !contemEmail && !contemMatricula) {
+                mostrar = false;
+            }
+        }
+        
         linha.style.display = mostrar ? '' : 'none';
+        if (mostrar) linhasVisiveis++;
     });
+    
+    // Atualizar contador de resultados
+    atualizarContadorResultados(linhasVisiveis, linhas.length);
+}
+
+function atualizarContadorResultados(visiveis, total) {
+    // Remover contador anterior se existir
+    const contadorAnterior = document.getElementById('contador-resultados');
+    if (contadorAnterior) {
+        contadorAnterior.remove();
+    }
+    
+    // Adicionar novo contador
+    if (visiveis !== total) {
+        const contador = document.createElement('div');
+        contador.id = 'contador-resultados';
+        contador.className = 'alert alert-info mt-2 mb-0';
+        contador.innerHTML = `
+            <i class="bi bi-info-circle me-1"></i>
+            Exibindo <strong>${visiveis}</strong> de <strong>${total}</strong> registros
+            ${visiveis !== total ? `<button class="btn btn-sm btn-outline-info ms-2" onclick="limparFiltros()">Ver todos</button>` : ''}
+        `;
+        
+        const tabelaContainer = document.querySelector('#tabela-detalhada').closest('.table-responsive');
+        tabelaContainer.parentNode.insertBefore(contador, tabelaContainer.nextSibling);
+    }
 }
 
 function limparFiltros() {
     document.getElementById('filtro-curso').value = '';
     document.getElementById('filtro-status').value = '';
     document.getElementById('filtro-conclusao').value = '0';
+    document.getElementById('filtro-aluno').value = '';
     document.getElementById('conclusao-valor').textContent = '0%';
     filtrarTabela();
 }
 
 function exportarRelatorio() {
-    // Criar CSV dos dados
-    let csv = 'Aluno,Email,Curso,Turma,Carga Horária,Horas Concluídas,Horas à Concluir,% Concluído,Status,Faltas\n';
+    // Criar CSV dos dados visíveis
+    let csv = 'Aluno,Email,Matrícula,Curso,Turma,Carga Horária,Horas Concluídas,Horas à Concluir,% Concluído,Status,Faltas\n';
     
     const linhasVisiveis = document.querySelectorAll('#tabela-detalhada tbody tr:not([style*="display: none"])');
     
     linhasVisiveis.forEach(linha => {
         const colunas = linha.querySelectorAll('td');
         const nomeAluno = colunas[0].querySelector('strong').textContent;
-        const emailAluno = colunas[0].querySelector('small').textContent;
+        const emailAluno = colunas[0].querySelectorAll('small')[0].textContent;
+        const matriculaAluno = colunas[0].querySelectorAll('small')[1].textContent.replace('Mat: ', '');
         const curso = colunas[1].querySelector('.fw-bold').textContent;
         const turma = colunas[2].textContent;
         const cargaHoraria = colunas[3].textContent;
@@ -405,11 +463,11 @@ function exportarRelatorio() {
         const status = colunas[7].querySelector('.badge').textContent.trim();
         const faltas = colunas[8].textContent.trim();
         
-        csv += `"${nomeAluno}","${emailAluno}","${curso}","${turma}","${cargaHoraria}","${horasConcluidas}","${horasAConcluir}","${percentConcluido}","${status}","${faltas}"\n`;
+        csv += `"${nomeAluno}","${emailAluno}","${matriculaAluno}","${curso}","${turma}","${cargaHoraria}","${horasConcluidas}","${horasAConcluir}","${percentConcluido}","${status}","${faltas}"\n`;
     });
     
     // Download do arquivo
-    const blob = new Blob([csv], { type: 'text/csv' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -422,5 +480,55 @@ function exportarRelatorio() {
 document.getElementById('filtro-conclusao').addEventListener('input', function() {
     document.getElementById('conclusao-valor').textContent = this.value + '%';
 });
+
+// Highlight de pesquisa em tempo real
+document.getElementById('filtro-aluno').addEventListener('input', function() {
+    const termo = this.value.toLowerCase().trim();
+    const linhas = document.querySelectorAll('#tabela-detalhada tbody tr');
+    
+    linhas.forEach(linha => {
+        // Remover highlights anteriores
+        linha.querySelectorAll('.highlight').forEach(el => {
+            el.outerHTML = el.innerHTML;
+        });
+        
+        if (termo && linha.style.display !== 'none') {
+            // Aplicar highlight
+            const primeiraColuna = linha.querySelector('td');
+            let html = primeiraColuna.innerHTML;
+            
+            if (termo.length >= 2) {
+                const regex = new RegExp(`(${termo})`, 'gi');
+                html = html.replace(regex, '<span class="highlight bg-warning">$1</span>');
+                primeiraColuna.innerHTML = html;
+            }
+        }
+    });
+});
+
+// Inicializar filtros
+document.addEventListener('DOMContentLoaded', function() {
+    // Aplicar filtro inicial para mostrar todos os dados
+    filtrarTabela();
+});
 </script>
+
+<style>
+.highlight {
+    background-color: #fff3cd !important;
+    padding: 1px 2px;
+    border-radius: 2px;
+    font-weight: bold;
+}
+
+#contador-resultados {
+    font-size: 0.9rem;
+    border-left: 4px solid #0dcaf0;
+}
+
+#filtro-aluno:focus {
+    border-color: #0dcaf0;
+    box-shadow: 0 0 0 0.2rem rgba(13, 202, 240, 0.25);
+}
+</style>
 {% endblock %}
