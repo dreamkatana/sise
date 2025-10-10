@@ -23,14 +23,12 @@ def save_course_config(config):
 
 def get_user_courses(user_email):
     """Busca cursos do usuário baseado no email"""
-    # COLOQUE UM BREAKPOINT NESTA LINHA ↓
     print(f"DEBUG: Buscando cursos para o email: {user_email}")
     
     try:
         course_config = load_course_config()
         codcua_order = course_config.get('codcua_order', [])
 
-        # COLOQUE UM BREAKPOINT NESTA LINHA ↓  
         print(f"DEBUG: Configuração carregada - códigos: {codcua_order}")
 
         query = db.session.query(
@@ -42,6 +40,8 @@ def get_user_courses(user_email):
             CursoAperfCol.PERFIM.label('DATA FINAL'),
             CursoAperfCol.DESSITCUA.label('SITUACAO DA TURMA'),
             CursoAperfCol.CARHOR.label('CARGA HORÁRIA'),
+            CursoAperfCol.FRECUA.label('FREQUENCIA_PERCENTUAL'),  # Campo já calculado
+            CursoAperfCol.SITCUA.label('CODIGO_STATUS'),
             FrequenciaTurma.QTDFAL.label('QUANTIDADE DE FALTAS'),
             FrequenciaTurma.HORFAL.label('HORAS_FALTA')
         ).join(
@@ -50,7 +50,7 @@ def get_user_courses(user_email):
         ).join(
             CursoAperf,
             CursoAperf.CODCUA == CursoAperfCol.CODCUA
-        ).join(
+        ).outerjoin(  # LEFT JOIN para casos sem frequência
             FrequenciaTurma,
             and_(
                 FichaCol.TIPCOL == FrequenciaTurma.TIPCOL,
@@ -71,14 +71,42 @@ def get_user_courses(user_email):
         results = query.all()
         courses = [dict(row._mapping) for row in results]
         
-        # Adicionar status dos cursos baseado nas datas
+        # Processar dados dos cursos
         now = datetime.now()
         for course in courses:
-            # Dividir carga horária por 60 para obter o valor correto
+            # Dividir carga horária por 60 para obter o valor correto em horas
             if course['CARGA HORÁRIA'] is not None:
                 course['CARGA HORÁRIA'] = course['CARGA HORÁRIA'] / 60
             
-            # Calcular porcentagem de progresso para cursos em andamento
+            # Usar frequência já calculada do banco
+            frequencia = course.get('FREQUENCIA_PERCENTUAL', 0.0) or 0.0
+            course['FREQUENCIA_PERCENTUAL'] = round(frequencia, 1)
+            
+            # Determinar status da frequência baseado na descrição da situação
+            situacao = course.get('SITUACAO DA TURMA', '').lower()
+            if 'completo' in situacao or 'aprovado' in situacao:
+                course['STATUS_FREQUENCIA'] = "Aprovado"
+                course['COR_FREQUENCIA'] = "success"
+            elif 'reprovado' in situacao and 'falta' in situacao:
+                course['STATUS_FREQUENCIA'] = "Reprovado por Falta"
+                course['COR_FREQUENCIA'] = "danger"
+            elif 'reprovado' in situacao:
+                course['STATUS_FREQUENCIA'] = "Reprovado"
+                course['COR_FREQUENCIA'] = "danger"
+            elif 'andamento' in situacao:
+                course['STATUS_FREQUENCIA'] = "Em Andamento"
+                course['COR_FREQUENCIA'] = "primary"
+            elif frequencia >= 75:
+                course['STATUS_FREQUENCIA'] = "Boa Frequência"
+                course['COR_FREQUENCIA'] = "success"
+            elif frequencia >= 50:
+                course['STATUS_FREQUENCIA'] = "Atenção"
+                course['COR_FREQUENCIA'] = "warning"
+            else:
+                course['STATUS_FREQUENCIA'] = "Baixa Frequência"
+                course['COR_FREQUENCIA'] = "danger"
+            
+            # Determinar status do curso baseado nas datas e situação
             if course['DATA FINAL'] and course['DATA FINAL'] < now:
                 course['status'] = 'completed'
                 course['progress_percentage'] = 100
@@ -87,25 +115,96 @@ def get_user_courses(user_email):
                 course['progress_percentage'] = 0
             else:
                 course['status'] = 'progress'
-                # Calcular porcentagem baseada nas datas
-                if course['DATA INICIO'] and course['DATA FINAL']:
-                    data_inicio = course['DATA INICIO']
-                    data_final = course['DATA FINAL']
-                    total_days = (data_final - data_inicio).days
-                    elapsed_days = (now - data_inicio).days
-                    
-                    if total_days > 0:
-                        progress = min(max((elapsed_days / total_days) * 100, 0), 100)
-                        course['progress_percentage'] = round(progress, 1)
-                    else:
-                        course['progress_percentage'] = 50  # Fallback se as datas forem iguais
+                # Para cursos em andamento, usar frequência como proxy para progresso
+                if 'andamento' in situacao:
+                    course['progress_percentage'] = min(frequencia, 100)
                 else:
-                    course['progress_percentage'] = 50  # Fallback se não houver datas
+                    # Calcular baseado nas datas
+                    if course['DATA INICIO'] and course['DATA FINAL']:
+                        data_inicio = course['DATA INICIO']
+                        data_final = course['DATA FINAL']
+                        total_days = (data_final - data_inicio).days
+                        elapsed_days = (now - data_inicio).days
+                        
+                        if total_days > 0:
+                            progress = min(max((elapsed_days / total_days) * 100, 0), 100)
+                            course['progress_percentage'] = round(progress, 1)
+                        else:
+                            course['progress_percentage'] = frequencia
+                    else:
+                        course['progress_percentage'] = frequencia
                 
         return courses
     except Exception as e:
         print(f"Erro ao buscar cursos: {e}")
+        import traceback
+        traceback.print_exc()
         return []
+
+def get_course_completion_stats():
+    """Calcula estatísticas de conclusão por curso"""
+    try:
+        course_config = load_course_config()
+        codcua_order = course_config.get('codcua_order', [])
+        
+        if not codcua_order:
+            return {}
+        
+        # Query para contar total de alunos por curso
+        total_query = db.session.query(
+            CursoAperf.CODCUA,
+            CursoAperf.NOMCUA,
+            func.count(CursoAperfCol.NUMCAD).label('total_alunos')
+        ).join(
+            CursoAperfCol,
+            CursoAperf.CODCUA == CursoAperfCol.CODCUA
+        ).filter(
+            CursoAperf.CODCUA.in_(codcua_order)
+        ).group_by(CursoAperf.CODCUA, CursoAperf.NOMCUA)
+        
+        # Query para contar alunos com status completo
+        completed_query = db.session.query(
+            CursoAperf.CODCUA,
+            func.count(CursoAperfCol.NUMCAD).label('alunos_completos')
+        ).join(
+            CursoAperfCol,
+            CursoAperf.CODCUA == CursoAperfCol.CODCUA
+        ).filter(
+            CursoAperf.CODCUA.in_(codcua_order),
+            CursoAperfCol.DESSITCUA.ilike('%completo%')
+        ).group_by(CursoAperf.CODCUA)
+        
+        # Executar queries
+        total_results = total_query.all()
+        completed_results = completed_query.all()
+        
+        # Criar dicionário com dados completos
+        completed_dict = {row[0]: row[1] for row in completed_results}
+        
+        stats = {}
+        for total_row in total_results:
+            codcua = total_row[0]
+            nome_curso = total_row[1]
+            total_alunos = total_row[2]
+            alunos_completos = completed_dict.get(codcua, 0)
+            
+            if total_alunos > 0:
+                taxa_conclusao = (alunos_completos / total_alunos) * 100
+            else:
+                taxa_conclusao = 0
+            
+            stats[codcua] = {
+                'nome_curso': nome_curso,
+                'total_alunos': total_alunos,
+                'alunos_completos': alunos_completos,
+                'taxa_conclusao': round(taxa_conclusao, 1)
+            }
+        
+        return stats
+        
+    except Exception as e:
+        print(f"Erro ao calcular estatísticas de conclusão: {e}")
+        return {}
 
 def get_course_stats(courses):
     """Calcula estatísticas dos cursos"""
@@ -281,18 +380,27 @@ def admin_dashboard():
         flash('Acesso negado! Área restrita para administradores.', 'error')
         return redirect(url_for('lms.dashboard'))
     
-    # Estatísticas administrativas (dados simulados)
+    # Obter estatísticas de conclusão dos cursos
+    completion_stats = get_course_completion_stats()
+    
+    # Calcular estatísticas administrativas
+    total_alunos = sum(stats['total_alunos'] for stats in completion_stats.values())
+    total_concluidos = sum(stats['alunos_completos'] for stats in completion_stats.values())
+    total_cursos = len(completion_stats)
+    taxa_geral = round((total_concluidos / total_alunos * 100) if total_alunos > 0 else 0, 1)
+    
     admin_stats = {
-        'total_usuarios': 156,
-        'cursos_ativos': 12,
-        'certificados': 89,
-        'total_horas': 2840
+        'total_usuarios': total_alunos,
+        'cursos_ativos': total_cursos,
+        'certificados': total_concluidos,
+        'taxa_conclusao': taxa_geral
     }
     
     course_config = load_course_config()
     
     return render_template('admin_dashboard.html',
                          admin_stats=admin_stats,
+                         completion_stats=completion_stats,
                          course_config=course_config)
 
 @lms_bp.route('/admin/courses/config', methods=['POST'])
@@ -319,8 +427,8 @@ def admin_courses_config():
 
 def get_relatorio_gestao_cursos():
     """
-    Gera relatório de gestão com disciplinas/carga horária oferecida VS alunos 
-    com carga horária concluída e à concluir para análise de metas.
+    Gera relatório de gestão usando a metodologia de taxa de conclusão real.
+    Baseado nos campos FRECUA (frequência) e DESSITCUA (status) da tabela V_EDUCORP_CURSO_APERF_COL.
     Mostra apenas os cursos configurados no painel de administração.
     """
     try:
@@ -361,11 +469,11 @@ def get_relatorio_gestao_cursos():
             CursoAperfCol.PERFIM.label('data_fim'),
             CursoAperfCol.DESSITCUA.label('situacao_curso'),
             CursoAperfCol.SITCUA.label('codigo_situacao'),
+            CursoAperfCol.FRECUA.label('frequencia_percentual'),  # Campo de frequência real
             
-            # Dados de frequência/faltas
+            # Dados de frequência/faltas (opcional)
             FrequenciaTurma.QTDFAL.label('quantidade_faltas'),
-            FrequenciaTurma.HORFAL.label('horas_falta'),
-            FrequenciaTurma.SITCUA.label('situacao_frequencia')
+            FrequenciaTurma.HORFAL.label('horas_falta')
             
         ).select_from(CursoAperf).join(
             CursoAperfCol,
@@ -403,22 +511,24 @@ def get_relatorio_gestao_cursos():
         cursos_summary = {}
         
         for row in results:
-            # Calcular horas concluídas e a concluir
-            # Usar sempre a carga horária oficial do curso (CHRCUA)
-            carga_total = float(row.carga_horaria_matricula or 0) / 60  # Carga oficial do curso
-            horas_falta = float(row.horas_falta or 0) / 60  # Ajustar para horas reais
-            horas_concluidas = max(0, carga_total - horas_falta)
-            horas_a_concluir = max(0, horas_falta)
+            # Usar carga horária da matrícula
+            carga_total = float(row.carga_horaria_matricula or 0) / 60  # Converter minutos para horas
             
-            # Calcular porcentagem de conclusão
-            percent_concluido = (horas_concluidas / carga_total * 100) if carga_total > 0 else 0
+            # Usar frequência real do banco
+            frequencia_percentual = float(row.frequencia_percentual or 0)
             
-            # Status do aluno baseado na situação
-            status_aluno = "Concluído" if row.codigo_situacao == 1 else \
-                          "Em Andamento" if row.codigo_situacao == 2 else \
-                          "Pendente" if row.codigo_situacao == 3 else \
-                          "Cancelado" if row.codigo_situacao == 4 else \
-                          row.situacao_curso or "Indefinido"
+            # Status do aluno baseado na situação real do banco (DESSITCUA)
+            status_aluno = row.situacao_curso or "Indefinido"
+            if status_aluno.lower().find('completo') != -1:
+                status_normalizado = "Concluído"
+            elif status_aluno.lower().find('andamento') != -1 or status_aluno.lower().find('cursando') != -1:
+                status_normalizado = "Em Andamento"
+            elif status_aluno.lower().find('pendente') != -1:
+                status_normalizado = "Pendente" 
+            elif status_aluno.lower().find('cancelado') != -1 or status_aluno.lower().find('desistente') != -1:
+                status_normalizado = "Cancelado"
+            else:
+                status_normalizado = status_aluno
             
             # Dados do aluno individual
             aluno_data = {
@@ -429,10 +539,9 @@ def get_relatorio_gestao_cursos():
                 'nome_aluno': row.nome_aluno,
                 'email_aluno': row.email_aluno,
                 'carga_horaria_total': carga_total,
-                'horas_concluidas': horas_concluidas,
-                'horas_a_concluir': horas_a_concluir,
-                'percent_concluido': round(percent_concluido, 1),
-                'status_aluno': status_aluno,
+                'frequencia_percentual': frequencia_percentual,
+                'status_aluno': status_normalizado,
+                'status_original': status_aluno,
                 'data_inicio': row.data_inicio,
                 'data_fim': row.data_fim,
                 'quantidade_faltas': row.quantidade_faltas or 0
@@ -443,42 +552,43 @@ def get_relatorio_gestao_cursos():
             # Acumular dados por curso para summary
             curso_key = f"{row.codigo_curso}_{row.nome_curso}"
             if curso_key not in cursos_summary:
-                # Usar carga horária total do curso (CHRCUA) dividida por 60
-                carga_horaria_curso = float(row.carga_horaria_matricula or 0) / 60
                 cursos_summary[curso_key] = {
                     'codigo_curso': row.codigo_curso,
                     'nome_curso': row.nome_curso,
-                    'carga_horaria_oferecida': carga_horaria_curso,
+                    'carga_horaria_oferecida': carga_total,
                     'total_alunos': 0,
                     'alunos_concluidos': 0,
                     'alunos_em_andamento': 0,
                     'alunos_pendentes': 0,
-                    'total_horas_concluidas': 0,
-                    'total_horas_a_concluir': 0,
-                    'media_conclusao': 0
+                    'alunos_cancelados': 0,
+                    'media_frequencia': 0,
+                    'soma_frequencia': 0
                 }
             
             # Atualizar contadores do curso
             curso_summary = cursos_summary[curso_key]
             curso_summary['total_alunos'] += 1
-            curso_summary['total_horas_concluidas'] += horas_concluidas
-            curso_summary['total_horas_a_concluir'] += horas_a_concluir
+            curso_summary['soma_frequencia'] += frequencia_percentual
             
-            if status_aluno == "Concluído":
+            if status_normalizado == "Concluído":
                 curso_summary['alunos_concluidos'] += 1
-            elif status_aluno == "Em Andamento":
+            elif status_normalizado == "Em Andamento":
                 curso_summary['alunos_em_andamento'] += 1
+            elif status_normalizado == "Cancelado":
+                curso_summary['alunos_cancelados'] += 1
             else:
                 curso_summary['alunos_pendentes'] += 1
         
-        # Calcular médias de conclusão por curso
+        # Calcular médias de frequência por curso
         for curso_summary in cursos_summary.values():
             if curso_summary['total_alunos'] > 0:
-                total_horas_possiveis = curso_summary['carga_horaria_oferecida'] * curso_summary['total_alunos']
-                if total_horas_possiveis > 0:
-                    curso_summary['media_conclusao'] = round(
-                        (curso_summary['total_horas_concluidas'] / total_horas_possiveis) * 100, 1
-                    )
+                curso_summary['media_frequencia'] = round(
+                    curso_summary['soma_frequencia'] / curso_summary['total_alunos'], 1
+                )
+                # Taxa de conclusão baseada em alunos com status completo
+                curso_summary['taxa_conclusao'] = round(
+                    (curso_summary['alunos_concluidos'] / curso_summary['total_alunos']) * 100, 1
+                )
         
         # Ordenar resumo de cursos pela ordem configurada no admin
         resumo_cursos_ordenado = []

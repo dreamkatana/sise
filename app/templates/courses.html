@@ -80,11 +80,12 @@
                 {% if curso.status == 'progress' %}
                 <div class="mb-3">
                     <div class="d-flex justify-content-between mb-1">
-                        <small>Progresso</small>
-                        <small>50%</small>
+                        <small>Frequência</small>
+                        <small>{{ curso['FREQUENCIA_PERCENTUAL'] if curso['FREQUENCIA_PERCENTUAL'] is not none else 0 }}%</small>
                     </div>
                     <div class="progress" style="height: 8px;">
-                        <div class="progress-bar bg-primary" role="progressbar" style="width: 50%"></div>
+                        <div class="progress-bar bg-primary" role="progressbar" 
+                             style="width: {{ curso['FREQUENCIA_PERCENTUAL'] if curso['FREQUENCIA_PERCENTUAL'] is not none else 0 }}%"></div>
                     </div>
                 </div>
                 {% endif %}

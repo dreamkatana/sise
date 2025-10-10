@@ -247,11 +247,11 @@
                                 <td>
                                     <span class="badge bg-secondary">{{ curso.alunos_pendentes }}</span>
                                 </td>
-                                <td>{{ curso.media_conclusao }}%</td>
+                                <td>{{ curso.taxa_conclusao }}%</td>
                                 <td>
-                                    <div class="progress progress-bar-custom">
-                                        <div class="progress-bar {% if curso.media_conclusao >= 80 %}bg-success{% elif curso.media_conclusao >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
-                                             style="width: {{ curso.media_conclusao }}%"></div>
+                                    <div class="progress" style="width: 100px;">
+                                        <div class="progress-bar {% if curso.taxa_conclusao >= 80 %}bg-success{% elif curso.taxa_conclusao >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                             style="width: {{ curso.taxa_conclusao or 0 }}%"></div>
                                     </div>
                                 </td>
                             </tr>
@@ -283,9 +283,7 @@
                                 <th>Curso</th>
                                 <th>Turma</th>
                                 <th>Carga Horária</th>
-                                <th>Horas Concluídas</th>
-                                <th>Horas à Concluir</th>
-                                <th>% Concluído</th>
+                                <th>Frequência (%)</th>
                                 <th>Status</th>
                                 <th>Faltas</th>
                                 <th>Período</th>
@@ -295,7 +293,7 @@
                             {% for aluno in dados_detalhados %}
                             <tr data-curso="{{ aluno.codigo_curso }}" 
                                 data-status="{{ aluno.status_aluno }}" 
-                                data-conclusao="{{ aluno.percent_concluido }}"
+                                data-conclusao="{{ aluno.frequencia_percentual }}"
                                 data-nome="{{ aluno.nome_aluno|lower }}"
                                 data-email="{{ aluno.email_aluno|lower }}"
                                 data-matricula="{{ aluno.matricula_aluno }}">
@@ -310,14 +308,12 @@
                                 </td>
                                 <td>{{ aluno.codigo_turma }}</td>
                                 <td>{{ aluno.carga_horaria_total }}h</td>
-                                <td class="text-success">{{ aluno.horas_concluidas }}h</td>
-                                <td class="text-warning">{{ aluno.horas_a_concluir }}h</td>
                                 <td>
                                     <div class="d-flex align-items-center">
-                                        <span class="me-2">{{ aluno.percent_concluido }}%</span>
+                                        <span class="me-2">{{ aluno.frequencia_percentual }}%</span>
                                         <div class="progress flex-grow-1 progress-bar-custom">
-                                            <div class="progress-bar {% if aluno.percent_concluido >= 80 %}bg-success{% elif aluno.percent_concluido >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
-                                                 style="width: {{ aluno.percent_concluido }}%"></div>
+                                            <div class="progress-bar {% if aluno.frequencia_percentual >= 80 %}bg-success{% elif aluno.frequencia_percentual >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                 style="width: {{ aluno.frequencia_percentual or 0 }}%"></div>
                                         </div>
                                     </div>
                                 </td>
@@ -325,6 +321,7 @@
                                     <span class="badge status-badge {% if aluno.status_aluno == 'Concluído' %}bg-success{% elif aluno.status_aluno == 'Em Andamento' %}bg-warning text-dark{% elif aluno.status_aluno == 'Pendente' %}bg-secondary{% else %}bg-danger{% endif %}">
                                         {{ aluno.status_aluno }}
                                     </span>
+                                    <br><small class="text-muted">{{ aluno.status_original }}</small>
                                 </td>
                                 <td>
                                     {% if aluno.quantidade_faltas > 0 %}
@@ -445,7 +442,7 @@ function limparFiltros() {
 
 function exportarRelatorio() {
     // Criar CSV dos dados visíveis
-    let csv = 'Aluno,Email,Matrícula,Curso,Turma,Carga Horária,Horas Concluídas,Horas à Concluir,% Concluído,Status,Faltas\n';
+    let csv = 'Aluno,Email,Matrícula,Curso,Turma,Carga Horária,Frequência (%),Status,Faltas\n';
     
     const linhasVisiveis = document.querySelectorAll('#tabela-detalhada tbody tr:not([style*="display: none"])');
     
@@ -457,13 +454,11 @@ function exportarRelatorio() {
         const curso = colunas[1].querySelector('.fw-bold').textContent;
         const turma = colunas[2].textContent;
         const cargaHoraria = colunas[3].textContent;
-        const horasConcluidas = colunas[4].textContent;
-        const horasAConcluir = colunas[5].textContent;
-        const percentConcluido = colunas[6].querySelector('span').textContent;
-        const status = colunas[7].querySelector('.badge').textContent.trim();
-        const faltas = colunas[8].textContent.trim();
+        const frequencia = colunas[4].querySelector('span').textContent;
+        const status = colunas[5].querySelector('.badge').textContent.trim();
+        const faltas = colunas[6].textContent.trim();
         
-        csv += `"${nomeAluno}","${emailAluno}","${matriculaAluno}","${curso}","${turma}","${cargaHoraria}","${horasConcluidas}","${horasAConcluir}","${percentConcluido}","${status}","${faltas}"\n`;
+        csv += `"${nomeAluno}","${emailAluno}","${matriculaAluno}","${curso}","${turma}","${cargaHoraria}","${frequencia}","${status}","${faltas}"\n`;
     });
     
     // Download do arquivo
